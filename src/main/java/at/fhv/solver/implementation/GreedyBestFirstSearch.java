@@ -1,28 +1,32 @@
 package at.fhv.solver.implementation;
 
-import at.fhv.evaluation.SearchRecorder;
-import at.fhv.model.jssp.Job;
 import at.fhv.solver.ISearchAlgorithm;
 import at.fhv.evaluation.IHeuristic;
+import at.fhv.model.jssp.Job;
 import at.fhv.model.jssp.JsspProblem;
 import at.fhv.model.jssp.Operation;
 import at.fhv.model.jssp.Schedule;
 import at.fhv.solver.Node;
 import at.fhv.solver.State;
+import at.fhv.visualization.SearchStatistics;
 
 import java.util.*;
 
 public class GreedyBestFirstSearch implements ISearchAlgorithm {
     private final IHeuristic heuristic;
-    private final SearchRecorder searchRecorder;
+    private final SearchStatistics statistics;
 
     public GreedyBestFirstSearch(IHeuristic heuristic) {
-        this(heuristic, new SearchRecorder());
+        this(heuristic, new SearchStatistics());
     }
 
-    public GreedyBestFirstSearch(IHeuristic heuristic, SearchRecorder searchRecorder) {
+    public GreedyBestFirstSearch(IHeuristic heuristic, SearchStatistics statistics) {
         this.heuristic = heuristic;
-        this.searchRecorder = searchRecorder;
+        this.statistics = statistics;
+    }
+
+    public SearchStatistics getStatistics() {
+        return statistics;
     }
 
     @Override
@@ -38,40 +42,38 @@ public class GreedyBestFirstSearch implements ISearchAlgorithm {
         reached.put(initialState, initialNode);
         frontier.add(initialNode);
 
-        int totalOperations = countTotalOperations(jsspProblem);
+        statistics.setTotalOperations(countTotalOperations(jsspProblem));
         long expanded = 0;
         int maxDepth = 0;
 
-        searchRecorder.start();
-        try {
-            while (!frontier.isEmpty()) {
-                Node current = frontier.poll();
+        while (!frontier.isEmpty()) {
+            Node current = frontier.poll();
 
-                if (jsspProblem.isGoal(current.state())) {
-                    searchRecorder.record(expanded, reached.size(), frontier.size(), totalOperations, totalOperations);
-                    return new Schedule(current.state().scheduledOperations());
-                }
-
-                expanded = expanded+1;
-
-                int depth = current.state().scheduledOperations().size();
-                if (depth > maxDepth) {
-                    maxDepth = depth;
-                }
-
-                for (Node child : expand(current, jsspProblem)) {
-                    State childState = child.state();
-                    if (!reached.containsKey(childState)) {
-                        reached.put(childState, child);
-                        frontier.add(child);
-                    }
-                }
-                searchRecorder.sample(expanded, reached.size(), frontier.size(), maxDepth, totalOperations);
+            if (jsspProblem.isGoal(current.state())) {
+                statistics.record(expanded, reached.size(), frontier.size(), maxDepth);
+                return new Schedule(current.state().scheduledOperations());
             }
-            return null;
-        } finally {
-            searchRecorder.finish();
+            expanded++;
+
+            int depth = current.state().scheduledOperations().size();
+            if (depth > maxDepth) {
+                maxDepth = depth;
+            }
+
+            for (Node child : expand(current, jsspProblem)) {
+                State childState = child.state();
+                if (!reached.containsKey(childState)) {
+                    reached.put(childState, child);
+                    frontier.add(child);
+                }
+            }
+            statistics.record(expanded, reached.size(), frontier.size(), maxDepth);
+
+            if (statistics.limitReached(expanded)) {
+                return null;
+            }
         }
+        return null;
     }
 
     private State createInitialState(JsspProblem problem) {
@@ -81,10 +83,8 @@ public class GreedyBestFirstSearch implements ISearchAlgorithm {
         return new State(nextOperation, machineAvailableTime, jobAvailableTime, new ArrayList<>());
     }
 
-
-    private List<Node> expand (Node node, JsspProblem problem) {
+    private List<Node> expand(Node node, JsspProblem problem) {
         List<Node> children = new ArrayList<>();
-
         for (Operation operation : problem.getAvailableOperations(node.state())) {
             State newState = problem.applyOperation(node.state(), operation);
             double heuristicValue = heuristic.evaluate(newState);
