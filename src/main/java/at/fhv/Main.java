@@ -11,7 +11,7 @@ import java.io.IOException;
 public class Main {
     public static void main(String[] args) throws IOException {
         Parser parser = new Parser();
-        JsspProblem jsspProblem = parser.parse("benchmarks/la02.txt");
+        JsspProblem jsspProblem = parser.parse("benchmarks/ea01.txt");
         ISearchAlgorithm algorithm = new GreedyBestFirstSearch(new MakespanEstimateHeuristic(jsspProblem));
 
         Schedule schedule = algorithm.solve(jsspProblem);
