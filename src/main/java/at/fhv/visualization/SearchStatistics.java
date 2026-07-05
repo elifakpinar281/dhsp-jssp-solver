@@ -1,9 +1,9 @@
 package at.fhv.visualization;
 
-
 import java.util.ArrayList;
 import java.util.List;
 
+// will be updated later
 public class SearchStatistics {
     public record Sample(long expansions, int reached, int frontier, int maxDepth) {}
 

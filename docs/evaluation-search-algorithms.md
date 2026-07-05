@@ -2,14 +2,14 @@
 Evaluation follows the four criteria by Russell and Norvig (2020): Completeness, Cost Optimality, Time Complexity and Space Complexity.
 Each algorithm is assessed both theoretically (what the algorithm guarantees) and empirically (measurements on benchmark instances).
 
-- b ... branching factor (the number of operations that can be scheduled next
+- b ... branching factor (the number of operations that can be scheduled next)
 - n ... number of operations to be scheduled
 - d ... search depth, which equals the total number of operations (n times m)
 
 ### 1. Greedy Best-First Search (GBFS)
 In GBFS, the frontier is ordered by the heuristic h(n), without g(n).
-The heuristic used is MakespanEstimateHeuristic. 
-For each job it computes the time already spent in the baths plus the sum of the remaining nominal processing times and it takes the maximum over all jobs.
+The heuristic used is MakespanEstimateHeuristic.
+For each job it computes the time already spent in the shop plus the sum of the remaining nominal processing times and it takes the maximum over all jobs.
 This value is a lower bound on the remaining time and ignores machine contention
 
 
@@ -36,9 +36,31 @@ problem.
 Java VM terminated with OutOfMemoryError before the goal state was reached.
 The OutOfMemoryError occurs on both standard benchmarks.
 
+The following two plots illustrate the run on **la02** 
+
+#### Plot 1
+<img src="assets/memory-usage-gbfs.png" alt="Memory usage of GBFS on la02" width="85%">
+
+Memory usage over the course of the search.
+The x-axis shows the number of expansions (in thousands), the y-axis the number of stored states (in millions). 
+Both curves grow continuously and without bound and reached grows much faster than frontier, since almost no state is ever removed from it. 
+This confirms the theoretical space complexity of O(b^d): memory consumption is driven by the number of distinct states and there is no mechanism that limits it before the process runs out of heap.
+
+
+
+
+#### Plot 2
+<img src="assets/search-progress-gbfs.png" alt="Search progress of GBFS on la02" width="85%">
+
+Search depth over the course of the search.
+The x-axis again shows the number of expansions (in thousands), the y-axis the maximum search depth reached so far. 
+The gray horizontal line marks the goal depth, 36 operations for la02. 
+The curve rises early on but then flattens into long plateaus where additional expansions no longer increase the maximum depth. 
+This is the plateau effect. Any sibling states share the same heuristic value, so GBFS keeps expanding states at the same depth instead of descending toward the goal. The curve never reaches the goal depth line before the process runs out of memory.
+
 
 #### 1.3 Interpretation
-The OutOfMemoryError is not an implementation defect, since the algorithm is tested on a instance and works correctly.
+The OutOfMemoryError is not an implementation defect, since the algorithm is tested on an instance and works correctly.
 The GBFS algorithm stores all reached states.
 Because the number of possible partial schedules in the JSSP grows exponentially with the problem size, memory is exhausted
 on realistic instances before a goal is reached.
@@ -49,7 +71,7 @@ GBFS can no longer distinguish between them and explores the plateau almost brea
 A tie break by depth was tested and did not solve the problem, because ordering the frontier does not bound the memory. All states remain in reached and in the frontier.
 
 
-###  1.4 Consequence
+### 1.4 Consequence
 GBFS is useful as a reference on small instances.
 2x2 instance confirms that the modelling and the makespan computation are correct.
 However, it does not scale to standard benchmarks.

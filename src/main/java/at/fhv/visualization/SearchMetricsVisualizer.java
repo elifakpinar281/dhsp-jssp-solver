@@ -17,6 +17,7 @@ import java.awt.*;
 import java.io.File;
 import java.io.IOException;
 
+// will be updated later
 public class SearchMetricsVisualizer extends JFrame {
     private final JFreeChart memoryChart;
     private final JFreeChart depthChart;
