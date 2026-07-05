@@ -1,0 +1,10 @@
+e.g.
+- Completeness
+- Cost optimality
+- Time complexity
+- Space complexity
+- Makespan
+- Parameter
+- Randomness
+
+Visualization?
