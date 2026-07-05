@@ -21,7 +21,7 @@ public class Parser {
 
         List<Machine> machines = new ArrayList<>();
 
-        for (int mcount = 0; mcount < jobCount; mcount++) {
+        for (int mcount = 0; mcount < machineCount; mcount++) {
             machines.add(new Machine(mcount));
         }
 

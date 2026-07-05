@@ -4,5 +4,5 @@ public record ScheduledOperation(
         int jobId,
         int machineId,
         int startTime,
-        int processingTime
+        int endTime
 ) {}

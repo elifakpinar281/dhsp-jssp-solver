@@ -32,14 +32,9 @@ public class JsspProblem {
 
             if (nextOpIndex < job.operations().size()) {
                 Operation nextOperation = job.operations().get(nextOpIndex);
-                int machineId = nextOperation.machineId();
-
-                if (state.machineAvailableTime()[machineId] <= state.jobAvailableTime()[jobId]) {
-                    availableOperations.add(nextOperation);
-                }
+                availableOperations.add(nextOperation);
             }
         }
-
         return availableOperations;
     }
 
@@ -57,6 +52,7 @@ public class JsspProblem {
         int startTime = Math.max(state.machineAvailableTime()[machineId], state.jobAvailableTime()[jobId]);
         int endTime = startTime+processingTime;
 
+        newNextOperation[jobId] = state.nextOperation()[jobId] + 1;
         newMachineAvailableTime[machineId] = endTime;
         newJobAvailableTime[jobId] = endTime;
 

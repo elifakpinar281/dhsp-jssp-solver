@@ -1,4 +1,4 @@
-package at.fhv.solver.algorithms;
+package at.fhv.solver;
 
 import at.fhv.model.jssp.JsspProblem;
 import at.fhv.model.jssp.Schedule;

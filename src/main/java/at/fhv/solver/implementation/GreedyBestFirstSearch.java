@@ -1,6 +1,6 @@
-package at.fhv.solver.algorithms.implementation;
+package at.fhv.solver.implementation;
 
-import at.fhv.solver.algorithms.ISearchAlgorithm;
+import at.fhv.solver.ISearchAlgorithm;
 import at.fhv.evaluation.IHeuristic;
 import at.fhv.model.jssp.JsspProblem;
 import at.fhv.model.jssp.Operation;
@@ -49,7 +49,10 @@ public class GreedyBestFirstSearch implements ISearchAlgorithm {
     }
 
     private State createInitialState(JsspProblem problem) {
-        return null;
+        int[] nextOperation = new int[problem.getJobs().size()];
+        int[] machineAvailableTime = new int[problem.getMachines().size()];
+        int[] jobAvailableTime = new int[problem.getJobs().size()];
+        return new State(nextOperation, machineAvailableTime, jobAvailableTime, new ArrayList<>());
     }
 
 
