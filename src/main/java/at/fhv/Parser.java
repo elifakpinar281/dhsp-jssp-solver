@@ -11,7 +11,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Scanner;
 
-// count as ids
 public class Parser {
     public JsspProblem parse(String filePath) throws IOException {
         Scanner scanner = new Scanner (new File(filePath));

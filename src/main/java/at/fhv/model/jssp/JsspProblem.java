@@ -38,7 +38,7 @@ public class JsspProblem {
         return availableOperations;
     }
 
-    public State applyOperation(State state, Operation operation) {
+    public Transition applyOperation(State state, Operation operation) {
         int jobId = operation.jobId();
         int machineId = operation.machineId();
         int processingTime = operation.processingTime();
@@ -47,8 +47,6 @@ public class JsspProblem {
         int[] newMachineAvailableTime = state.machineAvailableTime().clone();
         int[] newJobAvailableTime = state.jobAvailableTime().clone();
 
-        List<ScheduledOperation> newSchedule = new ArrayList<>(state.scheduledOperations());
-
         int startTime = Math.max(state.machineAvailableTime()[machineId], state.jobAvailableTime()[jobId]);
         int endTime = startTime+processingTime;
 
@@ -56,8 +54,9 @@ public class JsspProblem {
         newMachineAvailableTime[machineId] = endTime;
         newJobAvailableTime[jobId] = endTime;
 
-        newSchedule.add(new ScheduledOperation(jobId, machineId, startTime, endTime));
-        return new State(newNextOperation, newMachineAvailableTime, newJobAvailableTime, newSchedule);
+        State newState = new State(newNextOperation, newMachineAvailableTime, newJobAvailableTime);
+        ScheduledOperation scheduledOperation = new ScheduledOperation(jobId, machineId, startTime, endTime);
+        return new Transition(newState, scheduledOperation);
     }
 
     public List<Machine> getMachines() {

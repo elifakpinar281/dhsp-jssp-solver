@@ -1,15 +1,11 @@
 package at.fhv.solver;
 
-import at.fhv.model.jssp.ScheduledOperation;
-
 import java.util.Arrays;
-import java.util.List;
 
 public record State(
         int[] nextOperation,
         int[] machineAvailableTime,
-        int[] jobAvailableTime,
-        List<ScheduledOperation> scheduledOperations
+        int[] jobAvailableTime
 ) {
 
     @Override
@@ -25,7 +21,6 @@ public record State(
         return Arrays.equals(nextOperation, state.nextOperation)
                 && Arrays.equals(machineAvailableTime, state.machineAvailableTime)
                 && Arrays.equals(jobAvailableTime, state.jobAvailableTime);
-
     }
 
     @Override

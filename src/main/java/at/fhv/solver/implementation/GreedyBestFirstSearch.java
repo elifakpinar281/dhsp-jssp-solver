@@ -1,11 +1,8 @@
 package at.fhv.solver.implementation;
 
+import at.fhv.model.jssp.*;
 import at.fhv.solver.ISearchAlgorithm;
 import at.fhv.evaluation.IHeuristic;
-import at.fhv.model.jssp.Job;
-import at.fhv.model.jssp.JsspProblem;
-import at.fhv.model.jssp.Operation;
-import at.fhv.model.jssp.Schedule;
 import at.fhv.solver.Node;
 import at.fhv.solver.State;
 import at.fhv.visualization.SearchStatistics;
@@ -25,15 +22,11 @@ public class GreedyBestFirstSearch implements ISearchAlgorithm {
         this.statistics = statistics;
     }
 
-    public SearchStatistics getStatistics() {
-        return statistics;
-    }
-
     @Override
     public Schedule solve(JsspProblem jsspProblem) {
         State initialState = createInitialState(jsspProblem);
         double heuristicValue = heuristic.evaluate(initialState);
-        Node initialNode = new Node(initialState, null, heuristicValue);
+        Node initialNode = new Node(initialState, null, heuristicValue, null);
 
         PriorityQueue<Node> frontier = new PriorityQueue<>((n1, n2)
                 -> Double.compare(n1.heuristicValue(), n2.heuristicValue()));
@@ -51,11 +44,11 @@ public class GreedyBestFirstSearch implements ISearchAlgorithm {
 
             if (jsspProblem.isGoal(current.state())) {
                 statistics.record(expanded, reached.size(), frontier.size(), maxDepth);
-                return new Schedule(current.state().scheduledOperations());
+                return new Schedule(buildSchedule(current));
             }
             expanded++;
 
-            int depth = current.state().scheduledOperations().size();
+            int depth = scheduledCount(current.state());
             if (depth > maxDepth) {
                 maxDepth = depth;
             }
@@ -80,17 +73,36 @@ public class GreedyBestFirstSearch implements ISearchAlgorithm {
         int[] nextOperation = new int[problem.getJobs().size()];
         int[] machineAvailableTime = new int[problem.getMachines().size()];
         int[] jobAvailableTime = new int[problem.getJobs().size()];
-        return new State(nextOperation, machineAvailableTime, jobAvailableTime, new ArrayList<>());
+        return new State(nextOperation, machineAvailableTime, jobAvailableTime);
     }
 
     private List<Node> expand(Node node, JsspProblem problem) {
         List<Node> children = new ArrayList<>();
         for (Operation operation : problem.getAvailableOperations(node.state())) {
-            State newState = problem.applyOperation(node.state(), operation);
-            double heuristicValue = heuristic.evaluate(newState);
-            children.add(new Node(newState, node, heuristicValue));
+            Transition transition = problem.applyOperation(node.state(), operation);
+            double heuristicValue = heuristic.evaluate(transition.state());
+            children.add(new Node(transition.state(), node, heuristicValue, transition.scheduledOperation()));
         }
         return children;
+    }
+
+    private int scheduledCount(State state) {
+        int count = 0;
+        for (int next : state.nextOperation()) {
+            count = count + next;
+        }
+        return count;
+    }
+
+    private List<ScheduledOperation> buildSchedule(Node goal) {
+        List<ScheduledOperation> schedule = new ArrayList<>();
+        Node current = goal;
+        while (current != null && current.appliedOperation() != null) {
+            schedule.add(current.appliedOperation());
+            current = current.parent();
+        }
+        Collections.reverse(schedule);
+        return schedule;
     }
 
     private int countTotalOperations(JsspProblem problem) {
