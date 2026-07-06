@@ -3,7 +3,7 @@ Evaluation follows the four criteria by Russell and Norvig (2020): Completeness,
 Each algorithm is assessed both theoretically (what the algorithm guarantees) and empirically (measurements on benchmark instances).
 
 - b ... branching factor (the number of operations that can be scheduled next)
-- n ... number of operations to be scheduled
+- n ... number of jobs
 - d ... search depth, which equals the total number of operations (n times m)
 
 ### 1. Greedy Best-First Search (GBFS)
@@ -14,38 +14,37 @@ This value is a lower bound on the remaining time and ignores machine contention
 
 
 #### 1.1 Theoretical Evaluation
-| Criterion | GBFS                          | Justification |
-|-----------|-------------------------------|---------------|
-| Completeness | Completed, but memory bounded | The JSSP state space is finite and acyclic. Every action advances one job pointer, so no state is ever reached twice. With a reached set, GBFS therefore finds a solution if enough memory is available. In practice memory is exhausted before a goal is reached. |
-| Cost Optimality | No | GBFS orders states by h(n) only and ignores the accumulated cost g(n). The first complete schedule it finds is generally not the one with the minimal makespan. |
-| Time Complexity | Exponential in worst case, O(b^d) | Without g(n), there is no guarantee that the search descends toward a goal. With reached deduplication the runtime is bounded by the number of distinct reachable states, which is smaller than b^d but still exponential in the problem size. |
-| Space Complexity | Exponential, O(b^d) | GBFS keeps every reached state in reached and the entire frontier in the priority queue. Both grow with the number of distinct states. This is the binding limit and the cause of the OutOfMemoryError. |
+| Criterion | GBFS                          | Justification                                                                                                                                                                                                                                                                                                                                                                                             |
+|-----------|-------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| Completeness | Completed, but memory bounded | The JSSP state space is finite and acyclic. Every action advances one job pointer, so the sum of the job pointers strictly increases and no state can be revisited along a path. The reached set deduplicates states that several paths lead to. With a reached set, GBFS therefore finds a solution if enough memory is available. In practice memory is exhausted before a goal is reached. |
+| Cost Optimality | No | GBFS orders states by h(n) only and ignores the accumulated cost g(n). The first complete schedule it finds is generally not the one with the minimal makespan.                                                                                                                                                                                                                                           |
+| Time Complexity | Exponential in worst case, O(b^d) | Without g(n), there is no guarantee that the search descends toward a goal. With reached deduplication the runtime is bounded by the number of distinct reachable states, which is smaller than b^d but still exponential in the problem size.                                                                                                                                                            |
+| Space Complexity | Exponential, O(b^d) | GBFS keeps every reached state in reached and the entire frontier in the priority queue. Both grow with the number of distinct states. This is the binding limit and the cause of the OutOfMemoryError.                                                                                                                                                                                                   |
 
 
 #### 1.2 Empirical Evaluation
 Measured on three instances.
 
-| Instance        | Size | GBFS result | Observation |
-|-----------------|------|-------------|-------------|
-| custom ea01 2x2 | 2 jobs, 2 machines, 4 ops | Makespan 6 (optimal), instant | The state space is tiny, so GBFS terminates correctly. Used as a correctness test. |
-| ft06 | 6 jobs, 6 machines, 36 ops | Out of memory | After about 2.6 million expansions it had only reached depth 30 of 36, with more than 8.9 million states in reached and still growing. No goal reached. |
-| la02 | 10 jobs, 5 machines, 50 ops | Out of memory | After about 1 million expansions it had only reached depth 32 of 50, with roughly 6.9 million states in reached. No goal reached. |
+| Instance        | Size | GBFS result | Observation                                                                                                                                                                                     |
+|-----------------|------|-------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| custom ea01 2x2 | 2 jobs, 2 machines, 4 ops | Makespan 6 (optimal), instant | The state space is tiny, so GBFS terminates correctly. Used as a correctness test.                                                                                                              |
+| ft06 | 6 jobs, 6 machines, 36 ops | Out of memory | After about 2.1 million expansions it had reached a depth of only 32 of 36, with about 14.5 million states in reached (and about 12.3 million in the frontier), still growing. No goal reached. |
+| la02 | 10 jobs, 5 machines, 50 ops | Out of memory | After about 1 million expansions it had only reached depth 32 of 50, with about 6.9 million states in reached. No goal reached.                                                                 |
 
-The central observation is that instance size only shifts the limit and does not remove the
-problem.
+The central observation is that instance size only shifts the limit and does not remove the problem.
 Java VM terminated with OutOfMemoryError before the goal state was reached.
 The OutOfMemoryError occurs on both standard benchmarks.
 
-The following two plots illustrate the run on **ft06** 
+The following two plots illustrate the run on **ft06**
 
 #### Plot 1
 <img src="assets/memory-usage-gbfs.png" alt="Memory usage of GBFS on ft06" width="85%">
 
 Memory usage over the course of the search.
 The x-axis shows the number of expansions (in thousands), the y-axis the number of stored states (in millions).
-Both curves grow continuously and without bound, almost linearly in the number of expansions. 
-reached stays above frontier because nothing is ever removed from reached, whereas the frontier loses exactly one node on every expansion. 
-The frontier therefore tracks reached subtracted with the number of expansions and the gap between the two widens over time.
+Both curves grow continuously and without bound, almost linearly in the number of expansions.
+reached stays above frontier because nothing is ever removed from reached, whereas the frontier loses exactly one node on every expansion.
+The frontier therefore tracks reached minus the number of expansions and the gap between the two widens over time.
 This confirms the theoretical space complexity of O(b^d): memory consumption is driven by the number of distinct states and there is no mechanism that limits it before the process runs out of heap.
 
 
@@ -55,9 +54,9 @@ This confirms the theoretical space complexity of O(b^d): memory consumption is 
 
 Search depth over the course of the search.
 The x-axis again shows the number of expansions (in thousands), the y-axis the maximum search depth reached so far.
-The goal depth for ft06 is 36 operations, shown as the gray horizontal line.
+The goal depth for ft06 is 36 operations.
 The curve rises early on but then flattens into long plateaus where additional expansions no longer increase the maximum depth.
-This is the plateau effect. Sibling states share the same heuristic value, so GBFS keeps expanding states at the same depth instead of descending toward the goal. 
+This is the plateau effect. Sibling states share the same heuristic value, so GBFS keeps expanding states at the same depth instead of descending toward the goal.
 The curve stalls at depth 32 and never reaches the goal depth of 36 before the process runs out of memory.
 
 
