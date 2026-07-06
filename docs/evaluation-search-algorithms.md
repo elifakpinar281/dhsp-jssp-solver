@@ -25,38 +25,40 @@ This value is a lower bound on the remaining time and ignores machine contention
 #### 1.2 Empirical Evaluation
 Measured on three instances.
 
-| Instance                    | Size | GBFS result | Observation |
-|-----------------------------|------|-------------|-------------|
-| custom **ea01** 2x2 | 2 jobs, 2 machines, 4 ops | Makespan 6 (optimal), instant | The state space is tiny, so GBFS terminates correctly. Used as a correctness test. |
-| **ft06**  | 6 jobs, 6 machines, 36 ops | Out of memory | After about 2.6 million expansions it had only reached depth 30 of 36, with more than 8.9 million states in reached and still growing. No goal reached. |
-| **la02**     | 10 jobs, 5 machines, 50 ops | Out of memory | After about 1 million expansions it had only reached depth 32 of 50, with roughly 6.9 million states in reached. No goal reached. |
+| Instance        | Size | GBFS result | Observation |
+|-----------------|------|-------------|-------------|
+| custom ea01 2x2 | 2 jobs, 2 machines, 4 ops | Makespan 6 (optimal), instant | The state space is tiny, so GBFS terminates correctly. Used as a correctness test. |
+| ft06 | 6 jobs, 6 machines, 36 ops | Out of memory | After about 2.6 million expansions it had only reached depth 30 of 36, with more than 8.9 million states in reached and still growing. No goal reached. |
+| la02 | 10 jobs, 5 machines, 50 ops | Out of memory | After about 1 million expansions it had only reached depth 32 of 50, with roughly 6.9 million states in reached. No goal reached. |
 
 The central observation is that instance size only shifts the limit and does not remove the
 problem.
 Java VM terminated with OutOfMemoryError before the goal state was reached.
 The OutOfMemoryError occurs on both standard benchmarks.
 
-The following two plots illustrate the run on **la02** 
+The following two plots illustrate the run on **ft06** 
 
 #### Plot 1
-<img src="assets/memory-usage-gbfs.png" alt="Memory usage of GBFS on la02" width="85%">
+<img src="assets/memory-usage-gbfs.png" alt="Memory usage of GBFS on ft06" width="85%">
 
 Memory usage over the course of the search.
-The x-axis shows the number of expansions (in thousands), the y-axis the number of stored states (in millions). 
-Both curves grow continuously and without bound and reached grows much faster than frontier, since almost no state is ever removed from it. 
+The x-axis shows the number of expansions (in thousands), the y-axis the number of stored states (in millions).
+Both curves grow continuously and without bound, almost linearly in the number of expansions. 
+reached stays above frontier because nothing is ever removed from reached, whereas the frontier loses exactly one node on every expansion. 
+The frontier therefore tracks reached subtracted with the number of expansions and the gap between the two widens over time.
 This confirms the theoretical space complexity of O(b^d): memory consumption is driven by the number of distinct states and there is no mechanism that limits it before the process runs out of heap.
 
 
 
-
 #### Plot 2
-<img src="assets/search-progress-gbfs.png" alt="Search progress of GBFS on la02" width="85%">
+<img src="assets/search-progress-gbfs.png" alt="Search progress of GBFS on ft06" width="85%">
 
 Search depth over the course of the search.
-The x-axis again shows the number of expansions (in thousands), the y-axis the maximum search depth reached so far. 
-The gray horizontal line marks the goal depth, 36 operations for la02. 
-The curve rises early on but then flattens into long plateaus where additional expansions no longer increase the maximum depth. 
-This is the plateau effect. Any sibling states share the same heuristic value, so GBFS keeps expanding states at the same depth instead of descending toward the goal. The curve never reaches the goal depth line before the process runs out of memory.
+The x-axis again shows the number of expansions (in thousands), the y-axis the maximum search depth reached so far.
+The goal depth for ft06 is 36 operations, shown as the gray horizontal line.
+The curve rises early on but then flattens into long plateaus where additional expansions no longer increase the maximum depth.
+This is the plateau effect. Sibling states share the same heuristic value, so GBFS keeps expanding states at the same depth instead of descending toward the goal. 
+The curve stalls at depth 32 and never reaches the goal depth of 36 before the process runs out of memory.
 
 
 #### 1.3 Interpretation

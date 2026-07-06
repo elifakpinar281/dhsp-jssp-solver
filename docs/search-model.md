@@ -111,7 +111,10 @@ resulting state is not admissible.
 ### Action cost function ACTION-COST
 The cost of an action is the increase in makespan:
 
-- c(s, a, s') = Cmax(s') minus Cmax(s)
+````
+c(s, a, s') = Cmax(s') - Cmax(s)
+````
+
 - c ... the cost function, meaning how expensive the action is 
 - s ... the current state 
 - a ... the action 
@@ -126,7 +129,7 @@ Optimization objectives, for example:
 - Minimize makespan
 - Do not break any maximum dwell time constraint
 - No collisions
--Minimize transport time 
+- Minimize transport time 
 - Reduce product waiting time
 - Improve utilization of the baths
   

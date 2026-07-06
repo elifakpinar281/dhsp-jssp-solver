@@ -17,7 +17,8 @@ import java.awt.*;
 import java.io.File;
 import java.io.IOException;
 
-// will be updated later
+// https://github.com/jfree/jfreechart/releases/tag/v1.5.6
+// TODO: More Visualizations for thesis
 public class SearchMetricsVisualizer extends JFrame {
     private final JFreeChart memoryChart;
     private final JFreeChart depthChart;
@@ -42,21 +43,21 @@ public class SearchMetricsVisualizer extends JFrame {
         XYSeries reached = new XYSeries("reached");
         XYSeries frontier = new XYSeries("frontier");
 
-        for (SearchStatistics.Sample sample : statistics.getSamples()) {
+        for (Sample sample : statistics.getSamples()) {
             double x = sample.expansions() / 1000.0;
             reached.add(x, sample.reached() / 1_000_000.0);
-            frontier.add(x, sample.frontier() / 1_000_000.0);
+            frontier.add(x, sample.frontier()/1_000_000.0);
         }
 
-        XYSeriesCollection dataset = new XYSeriesCollection();
-        dataset.addSeries(reached);
-        dataset.addSeries(frontier);
+        XYSeriesCollection data = new XYSeriesCollection();
+        data.addSeries(reached);
+        data.addSeries(frontier);
 
         JFreeChart chart = ChartFactory.createXYLineChart(
                 "Memory usage",
                 "expansions (thousands)",
                 "stored states (millions)",
-                dataset,
+                data,
                 PlotOrientation.VERTICAL,
                 true, true, false);
 
@@ -67,18 +68,18 @@ public class SearchMetricsVisualizer extends JFrame {
     private JFreeChart buildDepthChart(SearchStatistics statistics) {
         XYSeries depth = new XYSeries("max depth reached");
 
-        for (SearchStatistics.Sample sample : statistics.getSamples()) {
+        for (Sample sample : statistics.getSamples()) {
             depth.add(sample.expansions() / 1000.0, sample.maxDepth());
         }
 
-        XYSeriesCollection dataset = new XYSeriesCollection();
-        dataset.addSeries(depth);
+        XYSeriesCollection data = new XYSeriesCollection();
+        data.addSeries(depth);
 
         JFreeChart chart = ChartFactory.createXYLineChart(
                 "Search progress",
                 "expansions (thousands)",
                 "search depth (scheduled operations)",
-                dataset,
+                data,
                 PlotOrientation.VERTICAL,
                 true, true, false);
 
@@ -89,7 +90,7 @@ public class SearchMetricsVisualizer extends JFrame {
             ValueMarker marker = new ValueMarker(goalDepth);
             marker.setPaint(Color.GRAY);
             marker.setStroke(new BasicStroke(1.5f));
-            marker.setLabel("goal depth (" + goalDepth + ")");
+            marker.setLabel("goal depth: " + goalDepth);
             marker.setLabelAnchor(RectangleAnchor.TOP_RIGHT);
             marker.setLabelTextAnchor(TextAnchor.BOTTOM_RIGHT);
             chart.getXYPlot().addRangeMarker(marker);

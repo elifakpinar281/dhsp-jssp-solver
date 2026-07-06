@@ -1,18 +1,23 @@
 package at.fhv.visualization;
 
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
+import java.io.FileReader;
+import java.io.FileWriter;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
-// will be updated later
 public class SearchStatistics {
-    public record Sample(long expansions, int reached, int frontier, int maxDepth) {}
-
     private final long sampleInterval;
     private final long maxExpansions;
 
     private final List<Sample> samples = new ArrayList<>();
     private int totalOperations = 0;
     private boolean stoppedByLimit = false;
+
+    private BufferedWriter sampleWriter;
+    private boolean headerWritten = false;
 
     public SearchStatistics() {
         this(1000, 0);
@@ -29,8 +34,59 @@ public class SearchStatistics {
 
     public void record(long expansions, int reached, int frontier, int maxDepth) {
         if (expansions % sampleInterval == 0) {
-            samples.add(new Sample(expansions, reached, frontier, maxDepth));
+            Sample sample = new Sample(expansions, reached, frontier, maxDepth);
+            samples.add(sample);
+            writeSample(sample);
         }
+    }
+
+    public void enableLog(String path) throws IOException {
+        this.sampleWriter = new BufferedWriter(new FileWriter(path));
+    }
+
+    private void writeSample(Sample sample) {
+        if (sampleWriter == null) {
+            return;
+        }
+        try {
+            if (!headerWritten) {
+                sampleWriter.write("totalOperations," + totalOperations);
+                sampleWriter.newLine();
+                sampleWriter.write("expansions,reached,frontier,maxDepth");
+                sampleWriter.newLine();
+                headerWritten = true;
+            }
+            sampleWriter.write(sample.expansions() + "," + sample.reached() + "," + sample.frontier() + "," + sample.maxDepth());
+            sampleWriter.newLine();
+            sampleWriter.flush();
+        } catch (IOException e) {
+            System.err.println("Could not write sample: " + e.getMessage());
+        }
+    }
+
+    public static SearchStatistics fromCsv(String path) throws IOException {
+        SearchStatistics searchStatistics = new SearchStatistics();
+        try (BufferedReader reader = new BufferedReader(new FileReader(path))) {
+            String firstLine = reader.readLine();
+            if (firstLine != null && firstLine.startsWith("totalOperations,")) {
+                searchStatistics.totalOperations = Integer.parseInt(firstLine.split(",")[1].trim());
+            }
+            reader.readLine();
+
+            String line;
+            while ((line = reader.readLine()) != null) {
+                if (line.isBlank()) {
+                    continue;
+                }
+                String[] parts = line.split(",");
+                long expansions = Long.parseLong(parts[0].trim());
+                int reached = Integer.parseInt(parts[1].trim());
+                int frontier = Integer.parseInt(parts[2].trim());
+                int maxDepth = Integer.parseInt(parts[3].trim());
+                searchStatistics.samples.add(new Sample(expansions, reached, frontier, maxDepth));
+            }
+        }
+        return searchStatistics;
     }
 
     public boolean limitReached(long expansions) {
@@ -50,9 +106,5 @@ public class SearchStatistics {
 
     public int getTotalOperations() {
         return totalOperations;
-    }
-
-    public boolean wasStoppedByLimit() {
-        return stoppedByLimit;
     }
 }
