@@ -1,8 +1,11 @@
 import at.fhv.evaluation.implementation.MakespanEstimateHeuristic;
 import at.fhv.model.jssp.*;
 import at.fhv.solver.implementation.GreedyBestFirstSearch;
+import at.fhv.solver.validation.ScheduleValidator;
+import at.fhv.solver.validation.ValidationResult;
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 
 import java.util.List;
@@ -25,6 +28,8 @@ class GreedyBestFirstSearchTest {
 
         GreedyBestFirstSearch solver = new GreedyBestFirstSearch(new MakespanEstimateHeuristic(jsspProblem));
         Schedule schedule = solver.solve(jsspProblem);
+        ScheduleValidator validator = new ScheduleValidator();
+        ValidationResult result = validator.validateSchedule(jsspProblem, schedule);
 
         int makespan = 0;
         for (ScheduledOperation operation : schedule.operations()) {
@@ -33,5 +38,6 @@ class GreedyBestFirstSearchTest {
             }
         }
         assertEquals(6, makespan);
+        assertTrue(result.valid(), "Schedule not valid: " + result.violations());
     }
 }
