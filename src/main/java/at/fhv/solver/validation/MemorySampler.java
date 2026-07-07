@@ -1,4 +1,4 @@
-package at.fhv.benchmark;
+package at.fhv.solver.validation;
 
 // runs in the background and samples JVM memory usage every 5 ms
 // for space complexity (peak memory consumption)

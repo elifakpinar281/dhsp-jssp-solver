@@ -1,4 +1,4 @@
-package at.fhv.benchmark;
+package at.fhv.solver.validation;
 
 import java.util.List;
 
