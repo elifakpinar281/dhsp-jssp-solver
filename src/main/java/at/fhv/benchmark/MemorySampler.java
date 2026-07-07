@@ -16,13 +16,13 @@ public class MemorySampler extends Thread {
 
             try {
                 Thread.sleep(INTERVAL);
-            } catch (InterruptedException e) {
+            } catch (InterruptedException exception) {
                 break;
             }
         }
     }
 
-    public void stopSampling() {
+    public void _stop() {
         running = false;
         interrupt();
     }

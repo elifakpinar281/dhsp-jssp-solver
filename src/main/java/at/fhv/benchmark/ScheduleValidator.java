@@ -68,11 +68,13 @@ public class ScheduleValidator {
     }
 
     private void checkTimeConsistency(List<ScheduledOperation> scheduledOperations, List<String> violations) {
-        // TODO
+        // TODO: check if start time is negative
+        // TODO: check if endtime is negative
+        // TODO: check if start time > end time
     }
 
     private void checkMachineOverlap(JsspProblem jsspProblem, List<ScheduledOperation> scheduledOperations, List<String> violations) {
-        // TODO
+        // TODO: check if machines overlap
     }
 
     public static int makespan(Schedule schedule) {
