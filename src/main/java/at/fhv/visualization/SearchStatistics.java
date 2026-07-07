@@ -16,6 +16,11 @@ public class SearchStatistics {
     private int totalOperations = 0;
     private boolean stoppedByLimit = false;
 
+    private long lastExpansions = 0;
+    private int lastReached = 0;
+    private int lastFrontier = 0;
+    private int lastMaxDepth = 0;
+
     private BufferedWriter sampleWriter;
     private boolean headerWritten = false;
 
@@ -33,6 +38,11 @@ public class SearchStatistics {
     }
 
     public void record(long expansions, int reached, int frontier, int maxDepth) {
+        this.lastExpansions = expansions;
+        this.lastReached = reached;
+        this.lastFrontier = frontier;
+        this.lastMaxDepth = maxDepth;
+
         if (expansions % sampleInterval == 0) {
             Sample sample = new Sample(expansions, reached, frontier, maxDepth);
             samples.add(sample);
@@ -106,5 +116,21 @@ public class SearchStatistics {
 
     public int getTotalOperations() {
         return totalOperations;
+    }
+
+    public long getLastExpansions() {
+        return lastExpansions;
+    }
+
+    public int getLastReached() {
+        return lastReached;
+    }
+
+    public int getLastFrontier() {
+        return lastFrontier;
+    }
+
+    public int getLastMaxDepth() {
+        return lastMaxDepth;
     }
 }
