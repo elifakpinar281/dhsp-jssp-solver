@@ -3,7 +3,9 @@ package at.fhv.benchmark;
 import at.fhv.model.jssp.*;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 public class ScheduleValidator {
     public ValidationResult validateSchedule(JsspProblem jsspProblem, Schedule schedule) {
@@ -16,7 +18,7 @@ public class ScheduleValidator {
 
         checkOperationCount(jsspProblem, scheduledOperations, violations);
         checkJobRouting(jsspProblem, scheduledOperations, violations);
-        checkMachineOverlap(jsspProblem, scheduledOperations, violations);
+        checkMachineOverlap(scheduledOperations, violations);
         checkTimeConsistency(scheduledOperations, violations);
 
         return new ValidationResult(violations.isEmpty(), violations);
@@ -68,13 +70,49 @@ public class ScheduleValidator {
     }
 
     private void checkTimeConsistency(List<ScheduledOperation> scheduledOperations, List<String> violations) {
-        // TODO: check if start time is negative
-        // TODO: check if endtime is negative
-        // TODO: check if start time > end time
+        for (ScheduledOperation operation : scheduledOperations) {
+            if (operation.startTime() < 0) {
+                violations.add("Operation/Job " + operation.jobId() + " has a negative starttime of: "  + operation.startTime());
+            }
+
+            if (operation.endTime() < 0) {
+                violations.add("Operation/Job " + operation.jobId() + " has a negative endtime of: "  + operation.endTime());
+            }
+
+            if (operation.startTime() > operation.endTime()) {
+                violations.add("Operation/Job " + operation.jobId() + " has a starttime of " + operation.startTime() + ", which is greater than its endtime " + operation.endTime());
+            }
+        }
     }
 
-    private void checkMachineOverlap(JsspProblem jsspProblem, List<ScheduledOperation> scheduledOperations, List<String> violations) {
-        // TODO: check if machines overlap
+    private void checkMachineOverlap(List<ScheduledOperation> scheduledOperations, List<String> violations) {
+        Map<Integer, List<ScheduledOperation>> planned = new HashMap<>();
+        for (ScheduledOperation scheduledOperation : scheduledOperations) {
+            int machine = scheduledOperation.machineId();
+            if (planned.containsKey(machine)) {
+                planned.get(machine).add(scheduledOperation);
+            } else {
+                List<ScheduledOperation> machineOperations = new ArrayList<>();
+                machineOperations.add(scheduledOperation);
+                planned.put(machine, machineOperations);
+            }
+        }
+
+        for (Map.Entry<Integer, List<ScheduledOperation>> entry : planned.entrySet()) {
+            List<ScheduledOperation> machineOperations = entry.getValue();
+
+            for (int i = 0; i < machineOperations.size(); i++ ) {
+                ScheduledOperation op1 = machineOperations.get(i);
+                for (int j = i + 1; j < machineOperations.size(); j++) {
+                    ScheduledOperation op2 = machineOperations.get(j);
+
+                    if (op1.startTime() < op2.endTime() && op2.startTime() < op1.endTime()) {
+                        violations.add("Overlap 1: " + op1 + ", and Operation 2: " + op2 + " overlap in time");
+
+                    }
+                }
+            }
+        }
     }
 
     public static int makespan(Schedule schedule) {
