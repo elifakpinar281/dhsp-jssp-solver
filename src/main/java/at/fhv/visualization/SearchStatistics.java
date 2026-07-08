@@ -11,7 +11,6 @@ import java.util.List;
 public class SearchStatistics {
     private final long sampleInterval;
     private final long maxExpansions;
-
     private final List<Sample> samples = new ArrayList<>();
     private int totalOperations = 0;
     private boolean stoppedByLimit = false;
@@ -20,6 +19,8 @@ public class SearchStatistics {
     private int lastReached = 0;
     private int lastFrontier = 0;
     private int lastMaxDepth = 0;
+
+    private long lastSampledExpansions = -1;
 
     private BufferedWriter sampleWriter;
     private boolean headerWritten = false;
@@ -43,10 +44,14 @@ public class SearchStatistics {
         this.lastFrontier = frontier;
         this.lastMaxDepth = maxDepth;
 
-        if (expansions % sampleInterval == 0) {
+        boolean firstSample = (lastSampledExpansions < 0);
+        boolean intervalReached = (expansions - lastSampledExpansions >= sampleInterval);
+
+        if (firstSample || intervalReached) {
             Sample sample = new Sample(expansions, reached, frontier, maxDepth);
             samples.add(sample);
             writeSample(sample);
+            lastSampledExpansions = expansions;
         }
     }
 
@@ -69,8 +74,8 @@ public class SearchStatistics {
             sampleWriter.write(sample.expansions() + "," + sample.reached() + "," + sample.frontier() + "," + sample.maxDepth());
             sampleWriter.newLine();
             sampleWriter.flush();
-        } catch (IOException e) {
-            System.err.println("Could not write sample: " + e.getMessage());
+        } catch (IOException exception) {
+            System.err.println("Could not write sample: " + exception.getMessage());
         }
     }
 

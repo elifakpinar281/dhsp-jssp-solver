@@ -14,8 +14,8 @@ import java.io.IOException;
 
 public class Main {
     private static final String INSTANCE = "benchmarks/ft06.txt";
-    private static final long SAMPLE_INTERVAL = 1000;
-    private static final String SAMPLE_LOG_DIR = "docs/assets/";
+    private static final long SAMPLE_INTERVAL = 1;
+    private static final String SAMPLE_DIR = "docs/assets/beam/";
     private static final int[] BEAM_WIDTHS = {1, 5, 20, 50, 100};
 
     public static void main(String[] args) throws IOException {
@@ -28,7 +28,7 @@ public class Main {
 
         for (int beamWidth : BEAM_WIDTHS) {
             SearchStatistics statistics = new SearchStatistics(SAMPLE_INTERVAL, 0);
-            statistics.enableLog(SAMPLE_LOG_DIR + "beam-ft06-k" + beamWidth + "-samples.csv");
+            statistics.enableLog(SAMPLE_DIR + "beam-ft06-k" + beamWidth + "-samples.csv");
             BeamSearch algorithm = new BeamSearch(heuristic, beamWidth, statistics);
 
             MemorySampler memorySampler = new MemorySampler();

@@ -19,34 +19,38 @@ import java.io.IOException;
 
 // https://github.com/jfree/jfreechart/releases/tag/v1.5.6
 // TODO: More Visualizations for thesis
-public class SearchMetricsVisualizer extends JFrame {
-    private final JFreeChart memoryChart;
-    private final JFreeChart depthChart;
-
-    public SearchMetricsVisualizer(String title, SearchStatistics statistics) {
-        super(title);
-
-        this.memoryChart = buildMemoryChart(statistics);
-        this.depthChart = buildDepthChart(statistics);
-
-        JPanel panel = new JPanel(new GridLayout(2, 1));
-        panel.add(new ChartPanel(memoryChart));
-        panel.add(new ChartPanel(depthChart));
-        panel.setPreferredSize(new Dimension(900, 800));
-
-        setContentPane(panel);
-        setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
-        pack();
+public class SearchMetricsVisualizer {
+    public static void saveCharts(SearchStatistics statistics, String memoryPath, String depthPath) throws IOException {
+        JFreeChart memoryChart = buildMemoryChart(statistics);
+        JFreeChart depthChart = buildDepthChart(statistics);
+        ChartUtils.saveChartAsPNG(new File(memoryPath), memoryChart, 900, 500);
+        ChartUtils.saveChartAsPNG(new File(depthPath), depthChart, 900, 500);
     }
 
-    private JFreeChart buildMemoryChart(SearchStatistics statistics) {
+    public static void show(String title, SearchStatistics statistics) {
+        JFreeChart memoryChart = buildMemoryChart(statistics);
+        JFreeChart depthChart = buildDepthChart(statistics);
+
+        SwingUtilities.invokeLater(() -> {
+            JFrame frame = new JFrame(title);
+            JPanel panel = new JPanel(new GridLayout(2, 1));
+            panel.add(new ChartPanel(memoryChart));
+            panel.add(new ChartPanel(depthChart));
+            panel.setPreferredSize(new Dimension(900, 800));
+            frame.setContentPane(panel);
+            frame.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
+            frame.pack();
+            frame.setVisible(true);
+        });
+    }
+
+    private static JFreeChart buildMemoryChart(SearchStatistics statistics) {
         XYSeries reached = new XYSeries("reached");
         XYSeries frontier = new XYSeries("frontier");
-
         for (Sample sample : statistics.getSamples()) {
-            double x = sample.expansions() / 1000.0;
-            reached.add(x, sample.reached() / 1_000_000.0);
-            frontier.add(x, sample.frontier()/1_000_000.0);
+            double x = sample.expansions();
+            reached.add(x, sample.reached());
+            frontier.add(x, sample.frontier());
         }
 
         XYSeriesCollection data = new XYSeriesCollection();
@@ -55,8 +59,8 @@ public class SearchMetricsVisualizer extends JFrame {
 
         JFreeChart chart = ChartFactory.createXYLineChart(
                 "Memory usage",
-                "expansions (thousands)",
-                "stored states (millions)",
+                "expansions",
+                "stored states",
                 data,
                 PlotOrientation.VERTICAL,
                 true, true, false);
@@ -65,11 +69,11 @@ public class SearchMetricsVisualizer extends JFrame {
         return chart;
     }
 
-    private JFreeChart buildDepthChart(SearchStatistics statistics) {
+    private static JFreeChart buildDepthChart(SearchStatistics statistics) {
         XYSeries depth = new XYSeries("max depth reached");
 
         for (Sample sample : statistics.getSamples()) {
-            depth.add(sample.expansions() / 1000.0, sample.maxDepth());
+            depth.add(sample.expansions(), sample.maxDepth());
         }
 
         XYSeriesCollection data = new XYSeriesCollection();
@@ -77,14 +81,13 @@ public class SearchMetricsVisualizer extends JFrame {
 
         JFreeChart chart = ChartFactory.createXYLineChart(
                 "Search progress",
-                "expansions (thousands)",
+                "expansions",
                 "search depth (scheduled operations)",
                 data,
                 PlotOrientation.VERTICAL,
                 true, true, false);
 
         stylePlot(chart);
-
         int goalDepth = statistics.getTotalOperations();
         if (goalDepth > 0) {
             ValueMarker marker = new ValueMarker(goalDepth);
@@ -98,22 +101,10 @@ public class SearchMetricsVisualizer extends JFrame {
         return chart;
     }
 
-    private void stylePlot(JFreeChart chart) {
+    private static void stylePlot(JFreeChart chart) {
         XYPlot plot = chart.getXYPlot();
         plot.setBackgroundPaint(Color.WHITE);
         plot.setDomainGridlinePaint(Color.LIGHT_GRAY);
         plot.setRangeGridlinePaint(Color.LIGHT_GRAY);
-    }
-
-    public void saveAsPng(String memoryPngPath, String depthPngPath) throws IOException {
-        ChartUtils.saveChartAsPNG(new File(memoryPngPath), memoryChart, 900, 500);
-        ChartUtils.saveChartAsPNG(new File(depthPngPath), depthChart, 900, 500);
-    }
-
-    public static void show(String title, SearchStatistics statistics) {
-        SwingUtilities.invokeLater(() -> {
-            SearchMetricsVisualizer frame = new SearchMetricsVisualizer(title, statistics);
-            frame.setVisible(true);
-        });
     }
 }
