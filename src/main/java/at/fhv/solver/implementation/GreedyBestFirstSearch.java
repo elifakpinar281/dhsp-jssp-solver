@@ -31,8 +31,8 @@ public class GreedyBestFirstSearch implements ISearchAlgorithm {
         PriorityQueue<Node> frontier = new PriorityQueue<>((n1, n2)
                 -> Double.compare(n1.heuristicValue(), n2.heuristicValue()));
 
-        Map<State, Node> reached = new HashMap<>();
-        reached.put(initialState, initialNode);
+        Set<State> reached = new HashSet<>();
+        reached.add(initialState);
         frontier.add(initialNode);
 
         statistics.setTotalOperations(countTotalOperations(jsspProblem));
@@ -55,8 +55,8 @@ public class GreedyBestFirstSearch implements ISearchAlgorithm {
 
             for (Node child : expand(current, jsspProblem)) {
                 State childState = child.state();
-                if (!reached.containsKey(childState)) {
-                    reached.put(childState, child);
+                if (!reached.contains(childState)) {
+                    reached.add(childState);
                     frontier.add(child);
                 }
             }
