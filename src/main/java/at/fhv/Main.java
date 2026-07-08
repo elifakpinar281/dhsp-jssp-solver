@@ -8,12 +8,14 @@ import at.fhv.solver.implementation.BeamSearch;
 import at.fhv.solver.validation.MemorySampler;
 import at.fhv.solver.validation.ScheduleValidator;
 import at.fhv.solver.validation.ValidationResult;
+import at.fhv.visualization.SearchMetricsVisualizer;
 import at.fhv.visualization.SearchStatistics;
 
+import java.io.File;
 import java.io.IOException;
 
 public class Main {
-    private static final String INSTANCE = "benchmarks/ft06.txt";
+    private static final String INSTANCE = "benchmarks/la02.txt";
     private static final long SAMPLE_INTERVAL = 1;
     private static final String SAMPLE_DIR = "docs/assets/beam/";
     private static final int[] BEAM_WIDTHS = {1, 5, 20, 50, 100};
@@ -24,11 +26,14 @@ public class Main {
         IHeuristic heuristic = new MakespanEstimateHeuristic(jsspProblem);
         ScheduleValidator validator = new ScheduleValidator();
 
+        new File(SAMPLE_DIR).mkdirs();
+
         System.out.println("k,makespan,peakHeap,valid");
 
         for (int beamWidth : BEAM_WIDTHS) {
+            String name = "beam-la02-k" + beamWidth;
             SearchStatistics statistics = new SearchStatistics(SAMPLE_INTERVAL, 0);
-            statistics.enableLog(SAMPLE_DIR + "beam-ft06-k" + beamWidth + "-samples.csv");
+            statistics.enableLog(SAMPLE_DIR + name + "-samples.csv");
             BeamSearch algorithm = new BeamSearch(heuristic, beamWidth, statistics);
 
             MemorySampler memorySampler = new MemorySampler();
@@ -38,6 +43,12 @@ public class Main {
 
             memorySampler._stop();
             long peak = memorySampler.getPeak();
+
+            if (!statistics.getSamples().isEmpty()) {
+                String memoryPng = SAMPLE_DIR + "memory-usage-" + name + ".png";
+                String progressPng = SAMPLE_DIR + "search-progress-" + name + ".png";
+                SearchMetricsVisualizer.saveCharts(statistics, memoryPng, progressPng);
+            }
 
             if (schedule == null) {
                 System.out.println(beamWidth + ",-,-,no solution");
