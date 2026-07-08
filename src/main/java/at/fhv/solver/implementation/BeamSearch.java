@@ -29,29 +29,27 @@ public class BeamSearch implements ISearchAlgorithm {
         List<Node> beam = new ArrayList<>();
         beam.add(initialNode);
 
-        Set<State> reached = new HashSet<>();
-        reached.add(initialState);
-
         statistics.setTotalOperations(countTotalOperations(jsspProblem));
         long expanded = 0;
         int maxDepth = 0;
 
         while (!beam.isEmpty()) {
             List<Node> candidates = new ArrayList<>();
+            Set<State> seen = new HashSet<>();
+
             for (Node node : beam) {
-                if (jsspProblem.isGoal(node.state())) {
-                    statistics.record(expanded, reached.size(), beam.size(), maxDepth);
-                    return new Schedule(buildSchedule(node));
-                }
-                expanded++;
                 int depth = scheduledCount(node.state());
                 if (depth > maxDepth) {maxDepth = depth;}
 
+                if (jsspProblem.isGoal(node.state())) {
+                    statistics.record(expanded, seen.size(), beam.size(), maxDepth);
+                    return new Schedule(buildSchedule(node));
+                }
+                expanded++;
+
 
                 for (Node child : expand(node, jsspProblem)) {
-                    State childState = child.state();
-                    if (!reached.contains(childState)) {
-                        reached.add(childState);
+                    if (seen.add(child.state())) {
                         candidates.add(child);
                     }
                 }
@@ -63,7 +61,7 @@ public class BeamSearch implements ISearchAlgorithm {
                 beam.add(candidates.get(i));
             }
 
-            statistics.record(expanded, reached.size(), beam.size(), maxDepth);
+            statistics.record(expanded, seen.size(), beam.size(), maxDepth);
             if (statistics.limitReached(expanded)) {
                 return null;
             }

@@ -83,3 +83,98 @@ Further steps:
 - For large instances in the long term, local search and metaheuristics such as Hill Climbing, Tabu Search or Simulated Annealing, which work in the space of complete schedules and need constant memory.
 
 GBFS shows empirically why plain state space search alone is not sufficient.
+
+___
+
+### 2. Beam Search
+Beam Search is memory bounded. It explores the state space layer by layer.
+In every layer it expands the current set of nodes (beam), collects all their successors, orders them by h(n) and keeps only k best successours for the next layer.
+All other successors are discarded, so the beam never holds more than k nodes.
+The parameter k is the beam width and controls the trade off between memory and solution quality.
+
+The heuristic used is MakespanEstimateHeuristic.
+A reached set is kept to remove duplicate states that several paths lead to.
+For a large k Beam Search approaches GBFS and for k equal to 1 it schedules one operation at a time.
+
+
+#### 2.1 Theoretical Evaluation
+
+| Criterion | Beam Search                           | Justification |
+|-----------|---------------------------------------|---------------|
+| Completeness | Incomplete in general (feasible here) | Because only the k best successors are kept, Beam Search can discard the only path that leads to a goal. Therefore, it is not complete in general. In this JSSP every complete schedule is a goal and every partial schedule can be extended by at least one available operation. As long as the beam is not emptied by duplicatie elimination, the search descends one level per layer and reaches a complete schedule. A (feasible) solution was found for every tested beam width. |
+| Cost Optimality | No                                    | The beam keeps the states with the lowest h(n) and keeps at most k nodes per layer. The path to the minimal makespan can be pruned away. Makespan found is a valid upper bound that improves with larger k but is not guaranteed to be optimal. |
+| Time Complexity | O(d * k * b)                          | Per layer at most k nodes are expanded and each generated at most b successors, over d layers. The runtime is linear in depth and beam width |
+| Space Complexity | Frontier O(k*b), reached set O(d * k * b) | Between layers only k nodes are retained. During expansion at most k * b successors exist at once. Therefore, frontier is bounded by beam width and independent of problem size. The reached set stores every visited state and grows linearly with the number of expansions. The reached set is dominating memory term here. |
+
+
+#### 2.2 Empirical Evaluation
+Measured on two standard instances for five beam widths.
+Every run terminated with a valid and complete schedule.
+
+ft06
+
+| k | makespan | gap to optimum | expansions | reached (states) | frontier (states) | valid |
+| --- | -------- | -------------| -----------| ----------------- | -----------------| ------ |
+| 1 | 136 | +147% | 36 | 129 | 1 | yes |
+| 5 | 109 | +98% | 176 | 566 | 5 | yes |
+| 20 | 89 | +62% | 687 | 2014 | 20 | yes |
+| 50 | 86 | +56% | 1683 | 4763 | 50 | yes |
+| 100 | 78 | +42% | 3323 | 9282 | 100 | yes |
+
+
+la02
+
+| k | makespan | gap to optimum | expansions | reached (states) | frontier (states) | valid |
+|-----|----------|----------------|------------|------------------|-------------------|-------|
+| 1 | 1662 | +154% | 50 | 282 | 1 | yes |
+| 5 | 1252 | +91% | 246 | 1343 | 5 | yes |
+| 20 | 1044 | +59% | 971 | 5035 | 20 | yes |
+| 50 | 1037 | +58% | 2409 | 12275 | 50 | yes |
+| 100 | 933 | +42% | 4773 | 23769 | 100 | yes |
+
+
+The central observations are:
+- Beam Search returns a valid schedule on both instances
+- The frontier never exceeds the beam width k. Memory stays bounded and small (low thousands of states). In comparison, GBFS had millions reached states.
+- A larger k lowers the makespan but increases expansions, reached states and runtime. On ft06 the makespan imrpoves only from 86 to 78 between k = 50 and k = 100, while the number of expansions almost doubles.
+- At k = 100 the makespan stays about 42% above the known optimum on both instances, which reflects the greedy and non-optimal nature of it.
+
+
+The following two plots illustrate the run on ft06 with beam width k = 100.
+
+#### Plot 1
+
+<img src="assets/beam/memory-usage-beam-ft06-k100.png" alt="Memory usage of Beam Search on ft06, k=100" width="85%">
+
+Memory usage over the source of the search.
+The x-axis shows the number of expansions, the y-axis the number of stored states.
+The frontier is the lower line. It stays flat at the beam width and never grows beyond k = 100.
+The number of nodes carried from one layer to the next is bounded by k and is independent of how far the search has progressed.
+The reached line rises almost linearly, because every newly generated state is added to the reached set and nothing is removed.
+Therefore, the reached set is the part of memory that grows, but it stays in the low thousands. 
+
+
+#### Plot 2
+
+<img src="assets/beam/search-progress-beam-ft06-k100.png" alt="Search progress of Beam Search on ft06, k=100" width="85%">
+
+Search depth over the course of the search. 
+The x-axis again shows the number of expansions, the y-axis the maximum search depth reached so far. 
+The goal depth for ft06 is 36 operations.
+The curve rises steadily and reaches the goal depth without long plateaus.
+Because only k nodes survive each layer, the search cannot spread out breadth first over a plateau of states with equal heuristic values.
+It is forced to move on the next layer.
+Therefore, the curve climbs to a complete schedule instead of stalling.
+
+
+#### 2.3 Interpretation
+Beam Search only keeps k nodes per layer.
+On both benchmarks it returns a valid schedule where GBFS fails and it does so with a bounded and small frontier.
+The price is solution quality.
+Pruning by h(n) alone discards promising branches and the plateaus in the heuristic mean that the k retained nodes are often not the ones on an optimal path.
+As a result the makespan is only an upper bound and stays well above the optimum.
+
+Increasing beam width k imrpoves quality and increases cost roughly linearly, with diminishing returns.
+A small k is fast and light but greedy, while a large k approaches behaviour of GBFS.
+
+
