@@ -1,9 +1,10 @@
 package at.fhv;
 
+import at.fhv.evaluation.IHeuristic;
 import at.fhv.evaluation.implementation.MakespanEstimateHeuristic;
 import at.fhv.model.jssp.JsspProblem;
 import at.fhv.model.jssp.Schedule;
-import at.fhv.solver.implementation.GreedyBestFirstSearch;
+import at.fhv.solver.implementation.BeamSearch;
 import at.fhv.solver.validation.MemorySampler;
 import at.fhv.solver.validation.ScheduleValidator;
 import at.fhv.solver.validation.ValidationResult;
@@ -14,41 +15,48 @@ import java.io.IOException;
 public class Main {
     private static final String INSTANCE = "benchmarks/ft06.txt";
     private static final long SAMPLE_INTERVAL = 1000;
-    private static final String SAMPLE_LOG = "docs/assets/gbfs-ft06-samples.csv";
+    private static final String SAMPLE_LOG_DIR = "docs/assets/";
+    private static final int[] BEAM_WIDTHS = {1, 5, 20, 50, 100};
 
     public static void main(String[] args) throws IOException {
         Parser parser = new Parser();
         JsspProblem jsspProblem = parser.parse(INSTANCE);
-
-        SearchStatistics searchStatistics = new SearchStatistics(SAMPLE_INTERVAL, 0);
-        searchStatistics.enableLog(SAMPLE_LOG);
-
-        GreedyBestFirstSearch algorithm = new GreedyBestFirstSearch(new MakespanEstimateHeuristic(jsspProblem), searchStatistics);
-        MemorySampler memorySampler = new MemorySampler();
-        memorySampler.start();
-
-        Schedule schedule = algorithm.solve(jsspProblem);
-
-        memorySampler._stop();
-        System.out.println("Peak-Heap: " + memorySampler.getPeak());
-
-        if (schedule == null) {
-            System.out.println("No solution found");
-            return;
-        }
-
+        IHeuristic heuristic = new MakespanEstimateHeuristic(jsspProblem);
         ScheduleValidator validator = new ScheduleValidator();
-        ValidationResult result = validator.validateSchedule(jsspProblem, schedule);
 
-        System.out.println("Validation result: " + result.summary());
+        System.out.println("k,makespan,peakHeap,valid");
 
-        if (!result.valid()) {
-            for (String violation: result.violations()) {
-                System.out.println(violation);
+        for (int beamWidth : BEAM_WIDTHS) {
+            SearchStatistics statistics = new SearchStatistics(SAMPLE_INTERVAL, 0);
+            statistics.enableLog(SAMPLE_LOG_DIR + "beam-ft06-k" + beamWidth + "-samples.csv");
+            BeamSearch algorithm = new BeamSearch(heuristic, beamWidth, statistics);
+
+            MemorySampler memorySampler = new MemorySampler();
+            memorySampler.start();
+
+            Schedule schedule = algorithm.solve(jsspProblem);
+
+            memorySampler._stop();
+            long peak = memorySampler.getPeak();
+
+            if (schedule == null) {
+                System.out.println(beamWidth + ",-,-,no solution");
+                continue;
             }
-        }
 
-        int makespan = ScheduleValidator.makespan(schedule);
-        System.out.println("Goal reached. Makespan: " + makespan);
+            ValidationResult result = validator.validateSchedule(jsspProblem, schedule);
+            int makespan = ScheduleValidator.makespan(schedule);
+
+            System.out.println(beamWidth + "," + makespan + "," + peak + "," + result.valid());
+
+            if (!result.valid()) {
+                for (String violation : result.violations()) {
+                    System.out.println("  " + violation);
+                }
+            }
+
+            schedule = null;
+            System.gc();
+        }
     }
 }
