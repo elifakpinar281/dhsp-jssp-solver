@@ -5,28 +5,47 @@ import at.fhv.model.jssp.Schedule;
 import at.fhv.solver.ISearchAlgorithm;
 import at.fhv.solver.IStartDecoder;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
 
 public class TabuSearch implements ISearchAlgorithm {
+    public record IterationSnapshot(int iteration, int makespan, int bestMakespan) {}
+
     private ScheduleEvaluator scheduleEvaluator;
     private INeighbourhood neighbourhood;
     private int tenure;
     private int maxIterationsWithoutImprovement;
     private IStartDecoder startDecoder;
     private final Random random;
+    private boolean verbose = true;
+    private final List<IterationSnapshot> history = new ArrayList<>();
 
     public TabuSearch(ScheduleEvaluator scheduleEvaluator, INeighbourhood neighbourhood, int tenure, int maxIterationsWithoutImprovement, IStartDecoder startDecoder) {
+        this(scheduleEvaluator, neighbourhood, tenure, maxIterationsWithoutImprovement, startDecoder, 42L);
+    }
+
+    public TabuSearch(ScheduleEvaluator scheduleEvaluator, INeighbourhood neighbourhood, int tenure, int maxIterationsWithoutImprovement, IStartDecoder startDecoder, long tieBreakSeed) {
         this.scheduleEvaluator = scheduleEvaluator;
         this.neighbourhood = neighbourhood;
         this.tenure = tenure;
         this.maxIterationsWithoutImprovement = maxIterationsWithoutImprovement;
         this.startDecoder = startDecoder;
-        this.random = new Random(42);
+        this.random = new Random(tieBreakSeed);
+    }
+
+    public TabuSearch withVerbose(boolean verbose) {
+        this.verbose = verbose;
+        return this;
+    }
+
+    public List<IterationSnapshot> getHistory() {
+        return history;
     }
 
     @Override
     public Schedule solve(JsspProblem jsspProblem) {
+        history.clear();
         MachineSequences current = startDecoder.decode(jsspProblem);
         MachineSequences best = current;
         ScheduleEvaluator.EvaluationResult currentResult = scheduleEvaluator.evaluate(current);
@@ -81,7 +100,11 @@ public class TabuSearch implements ISearchAlgorithm {
                 sinceImprovement++;
             }
 
-            System.out.println("Iteration: " + iteration + ", makespan: " + bestMoveMakespan);
+            history.add(new IterationSnapshot(iteration, bestMoveMakespan, makespanBest));
+
+            if (verbose) {
+                System.out.println("Iteration: " + iteration + ", makespan: " + bestMoveMakespan);
+            }
         }
         ScheduleEvaluator.EvaluationResult resultBest = scheduleEvaluator.evaluate(best);
         return scheduleEvaluator.toSchedule(resultBest);

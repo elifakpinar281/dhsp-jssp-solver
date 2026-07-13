@@ -87,7 +87,8 @@ public class RunAll {
                 ? new SearchStatistics(1000, GREEDY_MAX_EXPANSIONS)
                 : new SearchStatistics();
 
-        ISearchAlgorithm solver = buildSolver(algo, problem, heuristic, stats, spec);
+        TabuSearch[] tabuRef = new TabuSearch[1];
+        ISearchAlgorithm solver = buildSolver(algo, problem, heuristic, stats, spec, tabuRef);
 
         PrintStream realOut = System.out;
         MemorySampler mem = new MemorySampler();
@@ -111,6 +112,9 @@ public class RunAll {
         out.put("reached", stats.getLastReached());
         out.put("maxDepth", stats.getLastMaxDepth());
         out.put("peakHeap", mem.getPeak());
+        if (tabuRef[0] != null) {
+            out.put("iterations", tabuRef[0].getHistory());
+        }
 
         if (schedule == null) {
             out.put("valid", false);
@@ -128,7 +132,7 @@ public class RunAll {
         return out;
     }
 
-    private static ISearchAlgorithm buildSolver(String algo, JsspProblem problem, IHeuristic heuristic, SearchStatistics stats, InstanceSpec spec) {
+    private static ISearchAlgorithm buildSolver(String algo, JsspProblem problem, IHeuristic heuristic, SearchStatistics stats, InstanceSpec spec, TabuSearch[] tabuRef) {
         switch (algo) {
             case "GREEDY":
                 return new GreedySearch(heuristic, stats);
@@ -138,7 +142,9 @@ public class RunAll {
                 ScheduleEvaluator evaluator = new ScheduleEvaluator(problem);
                 INeighbourhood neighbourhood = new N5Neighbourhood();
                 IStartDecoder decoder = new RandomStartDecoder(new Random(42));
-                return new TabuSearch(evaluator, neighbourhood, TABU_TENURE, spec.tabuNoImprove(), decoder);
+                TabuSearch tabuSearch = new TabuSearch(evaluator, neighbourhood, TABU_TENURE, spec.tabuNoImprove(), decoder);
+                tabuRef[0] = tabuSearch;
+                return tabuSearch;
             default:
                 throw new IllegalArgumentException("Unknown algorithm: " + algo);
         }
@@ -151,6 +157,7 @@ public class RunAll {
         json.append(",\"reached\":").append(res.get("reached"));
         json.append(",\"maxDepth\":").append(res.get("maxDepth"));
         json.append(",\"peakHeap\":").append(res.get("peakHeap"));
+        appendIterations(json, res.get("iterations"));
         json.append(",\"valid\":").append(res.get("valid"));
         json.append(",\"makespan\":").append(res.get("makespan") == null ? "null" : res.get("makespan"));
         json.append(",\"schedule\":");
@@ -163,14 +170,29 @@ public class RunAll {
             for (int i = 0; i < ops.size(); i++) {
                 ScheduledOperation op = ops.get(i);
                 json.append("{\"j\":").append(op.jobId())
-                    .append(",\"m\":").append(op.machineId())
-                    .append(",\"s\":").append(op.startTime())
-                    .append(",\"e\":").append(op.endTime()).append("}");
+                        .append(",\"m\":").append(op.machineId())
+                        .append(",\"s\":").append(op.startTime())
+                        .append(",\"e\":").append(op.endTime()).append("}");
                 if (i < ops.size() - 1) json.append(",");
             }
             json.append("]");
         }
         json.append("}");
+    }
+
+    @SuppressWarnings("unchecked")
+    private static void appendIterations(StringBuilder json, Object iterationsObj) {
+        if (iterationsObj == null) {
+            return;
+        }
+        List<TabuSearch.IterationSnapshot> iterations = (List<TabuSearch.IterationSnapshot>) iterationsObj;
+        json.append(",\"iterations\":[");
+        for (int i = 0; i < iterations.size(); i++) {
+            TabuSearch.IterationSnapshot snap = iterations.get(i);
+            json.append("[").append(snap.iteration()).append(",").append(snap.makespan()).append(",").append(snap.bestMakespan()).append("]");
+            if (i < iterations.size() - 1) json.append(",");
+        }
+        json.append("]");
     }
 
     private static String esc(String s) {

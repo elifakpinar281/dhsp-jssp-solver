@@ -24,8 +24,8 @@ import java.util.Random;
 public class Main {
     private enum Algorithm { GREEDY, BEAM, TABU }
 
-    private static final Algorithm ALGORITHM = Algorithm.BEAM;
-    private static final String INSTANCE = "benchmarks/ft06.txt";
+    private static final Algorithm ALGORITHM = Algorithm.TABU;
+    private static final String INSTANCE = "benchmarks/demoanlage.txt";
 
     private static final int BEAM_WIDTH = 20;
 
