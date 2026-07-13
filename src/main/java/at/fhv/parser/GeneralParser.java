@@ -1,4 +1,4 @@
-package at.fhv;
+package at.fhv.parser;
 
 import at.fhv.model.exception.InvalidInstanceException;
 import at.fhv.model.jssp.Job;
@@ -32,8 +32,7 @@ public class GeneralParser {
                     int processingTime = nextInt(scanner, "processingTime");
 
                     if (machineId < 0 || machineId >= machineCount) {
-                        throw new InvalidInstanceException(
-                                "Job " + jobId + ": machineId " + machineId + " not in 0.." + (machineCount - 1));
+                        throw new InvalidInstanceException("Job " + jobId + ": machineId " + machineId + " not in 0.." + (machineCount - 1));
                     }
                     if (processingTime < 0) {
                         throw new InvalidInstanceException("Job " + jobId + ": negative processingTime " + processingTime);

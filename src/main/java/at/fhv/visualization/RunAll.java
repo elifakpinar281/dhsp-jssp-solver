@@ -1,5 +1,7 @@
-package at.fhv;
+package at.fhv.visualization;
 
+import at.fhv.parser.GeneralParser;
+import at.fhv.parser.Parser;
 import at.fhv.evaluation.IHeuristic;
 import at.fhv.evaluation.implementation.MakespanEstimateHeuristic;
 import at.fhv.model.jssp.JsspProblem;
@@ -17,7 +19,6 @@ import at.fhv.solver.impl.tabu.impl.N5Neighbourhood;
 import at.fhv.solver.validation.MemorySampler;
 import at.fhv.solver.validation.ScheduleValidator;
 import at.fhv.solver.validation.ValidationResult;
-import at.fhv.visualization.SearchStatistics;
 
 import java.io.IOException;
 import java.io.PrintStream;

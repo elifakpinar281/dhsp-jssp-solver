@@ -1,4 +1,4 @@
-package at.fhv;
+package at.fhv.parser;
 
 import at.fhv.model.exception.InvalidInstanceException;
 import at.fhv.model.jssp.Job;

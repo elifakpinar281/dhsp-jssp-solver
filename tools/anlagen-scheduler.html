@@ -71,8 +71,8 @@
         #statsCards .stat .v{font-family:var(--mono);font-size:16px;font-weight:600;margin-top:2px}
         #statsCards .stat .v small{font-size:11px;color:var(--tx3);font-weight:400}
         .statRow{display:flex;flex-wrap:wrap;gap:24px}
-        #bandWrap,#histWrap{position:relative;border:1px solid var(--line);border-radius:6px;margin-bottom:20px}
-        #bandChart,#histChart{display:block;width:100%}
+        #histWrap{position:relative;border:1px solid var(--line);border-radius:6px;margin-bottom:20px}
+        #histChart{display:block;width:100%}
         .runsToggle{font-family:var(--mono);font-size:11.5px;color:var(--tx2)}
         .runsToggle button{font-family:var(--mono);font-size:11.5px;color:var(--tx2);background:#fff;
             border:1px solid var(--line);border-radius:4px;padding:2px 8px;cursor:pointer;margin-left:5px}
@@ -147,9 +147,6 @@
         <div class="tools runsToggle" id="ganttPick"></div>
     </div>
     <div id="statsCards" style="display:none"></div>
-    <div id="bandWrap" style="display:none">
-        <canvas id="bandChart"></canvas>
-    </div>
     <div id="histWrap" style="display:none">
         <div class="gbar" style="margin:0;padding:6px 0 0">
             <div class="t" style="font-size:12px">Verteilung der Endergebnisse (Makespan je Lauf)</div>
@@ -192,9 +189,11 @@
     const tabuStats=()=>TABU_STATS[state.ds];
     const beamSweep=()=>BEAM_SWEEP[state.ds];
     state.tabuSeed=null;
+    state.tabuView='single';
     state.beamK=20;
     function bestSeed(ts){return ts.runs.reduce((a,b)=>b.makespan<a.makespan?b:a).seed;}
     function worstSeed(ts){return ts.runs.reduce((a,b)=>b.makespan>a.makespan?b:a).seed;}
+    function avgSeed(ts){const med=ts.summary.median;return ts.runs.reduce((a,b)=>Math.abs(b.makespan-med)<Math.abs(a.makespan-med)?b:a).seed;}
     function result(){
         const r=inst().results[state.algo];
         if(state.algo==='TABU'&&state.tabuSeed!=null){
@@ -404,11 +403,21 @@
 
     function buildGanttPick(){
         const box=document.getElementById('ganttPick');
-        const opts=[{k:'best',l:'Bestes'},{k:'worst',l:'Schlechtestes'},{k:'single',l:'Einzellauf'}];
+        const opts=[{k:'best',l:'Best-Case'},{k:'avg',l:'Ø-Case'},{k:'worst',l:'Worst-Case'},{k:'single',l:'Einzellauf'}];
         box.innerHTML='';
         const label=document.createElement('span');label.textContent='Anzeige:';box.appendChild(label);
         opts.forEach(o=>{const b=document.createElement('button');b.textContent=o.l;b.dataset.k=o.k;
-            b.onclick=()=>{state.tabuView=o.k;render();};box.appendChild(b);});
+            b.onclick=()=>{
+                state.tabuView=o.k;
+                const ts=tabuStats();
+                if(ts){
+                    if(o.k==='best')state.tabuSeed=bestSeed(ts);
+                    else if(o.k==='worst')state.tabuSeed=worstSeed(ts);
+                    else if(o.k==='avg')state.tabuSeed=avgSeed(ts);
+                    else state.tabuSeed=null;
+                }
+                render();
+            };box.appendChild(b);});
     }
     function syncGanttPick(){
         document.querySelectorAll('#ganttPick button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.k===state.tabuView));
@@ -428,52 +437,6 @@
         ];
         document.getElementById('statsCards').innerHTML=cells.map(c=>
             `<div class="stat"><div class="k">${c.k}</div><div class="v ${c.cls||''}">${c.v}${c.sub?` <small>${c.sub}</small>`:''}</div></div>`).join('');
-    }
-
-    const bcv=document.getElementById('bandChart'),bctx=bcv.getContext('2d');
-    function drawBand(ts){
-        const curve=ts.curve;
-        const W=bcv.parentElement.clientWidth,H=180;
-        const padL=54,padR=14,padT=10,padB=22;
-        const plotW=W-padL-padR,plotH=H-padT-padB;
-        const dpr=window.devicePixelRatio||1;
-        bcv.width=W*dpr;bcv.height=H*dpr;bcv.style.width=W+'px';bcv.style.height=H+'px';
-        bctx.setTransform(dpr,0,0,dpr,0,0);
-        let minMs=Infinity,maxMs=-Infinity;
-        for(const [,lo,,hi] of curve){minMs=Math.min(minMs,lo);maxMs=Math.max(maxMs,hi);}
-        const range=Math.max(1,maxMs-minMs);
-        const maxIter=curve[curve.length-1][0];
-        const xAt=n=>padL+(n/Math.max(1,maxIter))*plotW;
-        const yAt=ms=>padT+plotH-((ms-minMs)/range)*plotH;
-
-        bctx.clearRect(0,0,W,H);
-        bctx.textBaseline='middle';bctx.font='10px '+getFont();
-        const ySteps=4;
-        for(let s=0;s<=ySteps;s++){
-            const ms=minMs+range*s/ySteps,y=yAt(ms);
-            bctx.strokeStyle='#eee';bctx.beginPath();bctx.moveTo(padL,y+.5);bctx.lineTo(padL+plotW,y+.5);bctx.stroke();
-            bctx.fillStyle='#888';bctx.textAlign='right';bctx.fillText(fmtNum(Math.round(ms)),padL-6,y);
-        }
-        bctx.fillStyle='#888';bctx.textAlign='left';
-        bctx.fillText('Iteration 1',padL,padT+plotH+16);
-        bctx.textAlign='right';
-        bctx.fillText('Iteration '+maxIter,padL+plotW,padT+plotH+16);
-
-        bctx.fillStyle='#cfe8d6';bctx.beginPath();
-        curve.forEach(([it,lo],idx)=>{const x=xAt(it),y=yAt(lo);if(idx===0)bctx.moveTo(x,y);else bctx.lineTo(x,y);});
-        for(let i=curve.length-1;i>=0;i--){const [it,,,hi]=curve[i];bctx.lineTo(xAt(it),yAt(hi));}
-        bctx.closePath();bctx.fill();
-
-        bctx.lineWidth=1.6;bctx.strokeStyle='#1a7f37';bctx.beginPath();
-        curve.forEach(([it,,mean],idx)=>{const x=xAt(it),y=yAt(mean);if(idx===0)bctx.moveTo(x,y);else bctx.lineTo(x,y);});
-        bctx.stroke();
-
-        bctx.lineWidth=1.4;bctx.strokeStyle='#111';bctx.setLineDash([2,2]);bctx.beginPath();
-        curve.forEach(([it,lo],idx)=>{const x=xAt(it),y=yAt(lo);if(idx===0)bctx.moveTo(x,y);else bctx.lineTo(x,y);});
-        bctx.stroke();bctx.setLineDash([]);
-
-        bctx.strokeStyle='#ccc';bctx.lineWidth=1;bctx.beginPath();
-        bctx.moveTo(padL,padT+plotH+.5);bctx.lineTo(padL+plotW,padT+plotH+.5);bctx.stroke();
     }
 
     const hcv=document.getElementById('histChart'),hctx=hcv.getContext('2d');
@@ -512,17 +475,16 @@
 
     function drawStats(){
         const bar=document.getElementById('statsBar'),cards=document.getElementById('statsCards'),
-            bandWrap=document.getElementById('bandWrap'),histWrap=document.getElementById('histWrap');
+            histWrap=document.getElementById('histWrap');
         const ts=tabuStats();
         if(state.algo!=='TABU'||!ts){
-            bar.style.display='none';cards.style.display='none';bandWrap.style.display='none';histWrap.style.display='none';
+            bar.style.display='none';cards.style.display='none';histWrap.style.display='none';
             return;
         }
-        bar.style.display='';cards.style.display='';bandWrap.style.display='';histWrap.style.display='';
+        bar.style.display='';cards.style.display='';histWrap.style.display='';
         document.getElementById('statsRunCount').textContent=ts.runCount;
         syncGanttPick();
         renderStatsCards(ts);
-        drawBand(ts);
         drawHist(ts);
     }
 
