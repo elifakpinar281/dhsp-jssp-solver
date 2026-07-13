@@ -4,70 +4,83 @@ import at.fhv.evaluation.IHeuristic;
 import at.fhv.evaluation.implementation.MakespanEstimateHeuristic;
 import at.fhv.model.jssp.JsspProblem;
 import at.fhv.model.jssp.Schedule;
+import at.fhv.solver.ISearchAlgorithm;
+import at.fhv.solver.IStartDecoder;
+import at.fhv.solver.decoder.impl.RandomStartDecoder;
 import at.fhv.solver.implementation.BeamSearch;
+import at.fhv.solver.implementation.GreedySearch;
+import at.fhv.solver.implementation.tabu.INeighbourhood;
+import at.fhv.solver.implementation.tabu.ScheduleEvaluator;
+import at.fhv.solver.implementation.tabu.TabuSearch;
+import at.fhv.solver.implementation.tabu.impl.N5Neighbourhood;
 import at.fhv.solver.validation.MemorySampler;
 import at.fhv.solver.validation.ScheduleValidator;
 import at.fhv.solver.validation.ValidationResult;
-import at.fhv.visualization.SearchMetricsVisualizer;
 import at.fhv.visualization.SearchStatistics;
 
-import java.io.File;
 import java.io.IOException;
+import java.util.Random;
 
 public class Main {
-    private static final String INSTANCE = "benchmarks/la02.txt";
-    private static final long SAMPLE_INTERVAL = 1;
-    private static final String SAMPLE_DIR = "docs/assets/beam/";
-    private static final int[] BEAM_WIDTHS = {1, 5, 20, 50, 100};
+    private enum Algorithm { GREEDY, BEAM, TABU }
+
+    private static final Algorithm ALGORITHM = Algorithm.BEAM;
+    private static final String INSTANCE = "benchmarks/ft06.txt";
+
+    private static final int BEAM_WIDTH = 20;
+
+    private static final int TABU_TENURE = 10;
+    private static final int TABU_MAX_NO_IMPROVEMENT = 500;
+    private static final long TABU_SEED = 42;
 
     public static void main(String[] args) throws IOException {
         Parser parser = new Parser();
-        JsspProblem jsspProblem = parser.parse(INSTANCE);
-        IHeuristic heuristic = new MakespanEstimateHeuristic(jsspProblem);
+        JsspProblem problem = parser.parse(INSTANCE);
+        IHeuristic heuristic = new MakespanEstimateHeuristic(problem);
         ScheduleValidator validator = new ScheduleValidator();
 
-        new File(SAMPLE_DIR).mkdirs();
+        ISearchAlgorithm solver = buildSolver(ALGORITHM, problem, heuristic);
 
-        System.out.println("k,makespan,peakHeap,valid");
+        MemorySampler memorySampler = new MemorySampler();
+        memorySampler.start();
+        long start = System.currentTimeMillis();
 
-        for (int beamWidth : BEAM_WIDTHS) {
-            String name = "beam-la02-k" + beamWidth;
-            SearchStatistics statistics = new SearchStatistics(SAMPLE_INTERVAL, 0);
-            statistics.enableLog(SAMPLE_DIR + name + "-samples.csv");
-            BeamSearch algorithm = new BeamSearch(heuristic, beamWidth, statistics);
+        Schedule schedule = solver.solve(problem);
 
-            MemorySampler memorySampler = new MemorySampler();
-            memorySampler.start();
+        long elapsed = System.currentTimeMillis() - start;
+        memorySampler._stop();
+        long peak = memorySampler.getPeak();
+        System.out.println("algorithm,instance,makespan,peakHeap,timeMs,valid");
 
-            Schedule schedule = algorithm.solve(jsspProblem);
+        if (schedule == null) {
+            System.out.println(ALGORITHM + "," + INSTANCE + ",-,-," + elapsed + ",no solution");
+            return;
+        }
 
-            memorySampler._stop();
-            long peak = memorySampler.getPeak();
+        ValidationResult result = validator.validateSchedule(problem, schedule);
+        int makespan = ScheduleValidator.makespan(schedule);
+        System.out.println(ALGORITHM + "," + INSTANCE + "," + makespan + "," + peak + "," + elapsed + "," + result.valid());
 
-            if (!statistics.getSamples().isEmpty()) {
-                String memoryPng = SAMPLE_DIR + "memory-usage-" + name + ".png";
-                String progressPng = SAMPLE_DIR + "search-progress-" + name + ".png";
-                SearchMetricsVisualizer.saveCharts(statistics, memoryPng, progressPng);
+        if (!result.valid()) {
+            for (String violation : result.violations()) {
+                System.out.println("  " + violation);
             }
+        }
+    }
 
-            if (schedule == null) {
-                System.out.println(beamWidth + ",-,-,no solution");
-                continue;
-            }
-
-            ValidationResult result = validator.validateSchedule(jsspProblem, schedule);
-            int makespan = ScheduleValidator.makespan(schedule);
-
-            System.out.println(beamWidth + "," + makespan + "," + peak + "," + result.valid());
-
-            if (!result.valid()) {
-                for (String violation : result.violations()) {
-                    System.out.println("  " + violation);
-                }
-            }
-
-            schedule = null;
-            System.gc();
+    private static ISearchAlgorithm buildSolver(Algorithm algorithm, JsspProblem problem, IHeuristic heuristic) {
+        switch (algorithm) {
+            case GREEDY:
+                return new GreedySearch(heuristic);
+            case BEAM:
+                return new BeamSearch(heuristic, BEAM_WIDTH, new SearchStatistics());
+            case TABU:
+                ScheduleEvaluator evaluator = new ScheduleEvaluator(problem);
+                INeighbourhood neighbourhood = new N5Neighbourhood();
+                IStartDecoder decoder = new RandomStartDecoder(new Random(TABU_SEED));
+                return new TabuSearch(evaluator, neighbourhood, TABU_TENURE, TABU_MAX_NO_IMPROVEMENT, decoder);
+            default:
+                throw new IllegalArgumentException("Unknown algorithm: " + algorithm);
         }
     }
 }

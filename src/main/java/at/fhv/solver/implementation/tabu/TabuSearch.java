@@ -1,6 +1,5 @@
 package at.fhv.solver.implementation.tabu;
 
-import at.fhv.evaluation.IHeuristic;
 import at.fhv.model.jssp.JsspProblem;
 import at.fhv.model.jssp.Schedule;
 import at.fhv.solver.ISearchAlgorithm;
@@ -43,6 +42,9 @@ public class TabuSearch implements ISearchAlgorithm {
             iteration++;
             currentResult = scheduleEvaluator.evaluate(current);
             List<Move> neighbours = neighbourhood.generate(currentResult);
+            if (neighbours.isEmpty()) {
+                break;
+            }
             Move bestMove = null;
             int bestMoveMakespan = Integer.MAX_VALUE;
 
