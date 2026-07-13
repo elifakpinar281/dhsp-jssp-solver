@@ -7,7 +7,6 @@ import at.fhv.solver.State;
 
 import java.util.List;
 
-// TODO: Lower-bound estimate of the final makespan. May need adaptation for algorithms that require a cost-to-go heuristic
 public class MakespanEstimateHeuristic implements IHeuristic {
     private final JsspProblem jsspProblem;
 
