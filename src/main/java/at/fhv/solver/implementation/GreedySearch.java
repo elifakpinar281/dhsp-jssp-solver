@@ -9,15 +9,15 @@ import at.fhv.visualization.SearchStatistics;
 
 import java.util.*;
 
-public class GreedyBestFirstSearch implements ISearchAlgorithm {
+public class GreedySearch implements ISearchAlgorithm {
     private final IHeuristic heuristic;
     private final SearchStatistics statistics;
 
-    public GreedyBestFirstSearch(IHeuristic heuristic) {
+    public GreedySearch(IHeuristic heuristic) {
         this(heuristic, new SearchStatistics());
     }
 
-    public GreedyBestFirstSearch(IHeuristic heuristic, SearchStatistics statistics) {
+    public GreedySearch(IHeuristic heuristic, SearchStatistics statistics) {
         this.heuristic = heuristic;
         this.statistics = statistics;
     }

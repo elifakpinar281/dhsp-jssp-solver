@@ -1,6 +1,6 @@
 import at.fhv.evaluation.implementation.MakespanEstimateHeuristic;
 import at.fhv.model.jssp.*;
-import at.fhv.solver.implementation.GreedyBestFirstSearch;
+import at.fhv.solver.implementation.GreedySearch;
 import at.fhv.solver.validation.ScheduleValidator;
 import at.fhv.solver.validation.ValidationResult;
 import org.junit.jupiter.api.Test;
@@ -10,9 +10,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
 
-class GreedyBestFirstSearchTest {
+class GreedySearchTest {
     @Test
-    void testGreedyBestFirstSearch() {
+    void testGreedySearch() {
         Job job0 = new Job(0, List.of(
                 new Operation(0, 0, 0, 3),
                 new Operation(1, 0, 1, 2)
@@ -26,7 +26,7 @@ class GreedyBestFirstSearchTest {
         List<Machine> machines = List.of(new Machine(0), new Machine(1));
         JsspProblem jsspProblem = new JsspProblem(machines, List.of(job0, job1));
 
-        GreedyBestFirstSearch solver = new GreedyBestFirstSearch(new MakespanEstimateHeuristic(jsspProblem));
+        GreedySearch solver = new GreedySearch(new MakespanEstimateHeuristic(jsspProblem));
         Schedule schedule = solver.solve(jsspProblem);
         ScheduleValidator validator = new ScheduleValidator();
         ValidationResult result = validator.validateSchedule(jsspProblem, schedule);
