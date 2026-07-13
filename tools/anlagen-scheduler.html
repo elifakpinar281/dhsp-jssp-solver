@@ -117,6 +117,10 @@
             <div class="lab">Algorithmus</div>
             <div class="seg" id="segAlgo"></div>
         </div>
+        <div class="field" id="fieldBeamK" style="display:none">
+            <div class="lab">Beam-Breite k</div>
+            <div class="seg" id="segBeamK"></div>
+        </div>
     </div>
 
     <div class="stats" id="stats"></div>
@@ -221,19 +225,37 @@
         const sd=document.getElementById('segData');sd.innerHTML='';
         DATASETS.forEach(k=>{const b=document.createElement('button');
             b.textContent=DATA.instances[k].label.replace(/\s*\(.*\)/,'');
-            b.dataset.k=k;b.onclick=()=>{state.ds=k;state.algo=pickAlgo(k,state.algo);view.zoom=1;view.offX=0;render();};
+            b.dataset.k=k;b.onclick=()=>{state.ds=k;state.algo=pickAlgo(k,state.algo);view.zoom=1;view.offX=0;
+                state.beamK=pickBeamK(k,state.beamK);buildBeamKSeg();render();};
             sd.appendChild(b);});
         const sa=document.getElementById('segAlgo');sa.innerHTML='';
         ALGOS.forEach(a=>{const b=document.createElement('button');b.textContent=a.name;b.dataset.a=a.id;
             b.onclick=()=>{const r=inst().results[a.id];if(r&&r.schedule){state.algo=a.id;render();}};sa.appendChild(b);});
+        buildBeamKSeg();
+    }
+    function buildBeamKSeg(){
+        const sk=document.getElementById('segBeamK');sk.innerHTML='';
+        const sweep=beamSweep();
+        if(!sweep||!sweep.points)return;
+        sweep.points.filter(p=>p.makespan!=null).forEach(p=>{
+            const b=document.createElement('button');b.textContent='k='+p.k;b.dataset.k=p.k;
+            b.onclick=()=>{state.beamK=p.k;render();};sk.appendChild(b);
+        });
     }
     function pickAlgo(ds,algo){const r=DATA.instances[ds].results;if(r[algo]&&r[algo].schedule)return algo;
         for(const a of['BEAM','TABU','GREEDY'])if(r[a]&&r[a].schedule)return a;return algo;}
+    function pickBeamK(ds,k){const sw=BEAM_SWEEP[ds];if(!sw||!sw.points)return k;
+        const pts=sw.points.filter(p=>p.makespan!=null);if(!pts.length)return k;
+        if(pts.some(p=>p.k===k))return k;
+        return pts.reduce((a,b)=>Math.abs(b.k-k)<Math.abs(a.k-k)?b:a).k;}
     function syncSegs(){
         document.querySelectorAll('#segData button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.k===state.ds));
         document.querySelectorAll('#segAlgo button').forEach(b=>{const r=inst().results[b.dataset.a];const ok=r&&r.schedule;
             b.setAttribute('aria-pressed',b.dataset.a===state.algo);b.classList.toggle('dis',!ok);
             b.title=ok?'':'kein Ergebnis im Limit';});
+        document.getElementById('fieldBeamK').style.display=state.algo==='BEAM'?'':'none';
+        document.querySelectorAll('#segBeamK button').forEach(b=>{
+            b.setAttribute('aria-pressed',Number(b.dataset.k)===state.beamK);});
     }
     function renderStats(){
         const r=result();
@@ -515,7 +537,7 @@
         }
         bar.style.display='';wrap.style.display='';tbl.style.display='';
         const pts=sweep.points.filter(p=>p.makespan!=null);
-        const curK=20;
+        const curK=state.beamK;
 
         const W=bmcv.parentElement.clientWidth,H=200;
         const padL=54,padR=54,padT=14,padB=24;
@@ -572,13 +594,16 @@
         const bestMs=Math.min(...pts.map(p=>p.makespan));
         const rows=pts.map(p=>{
             const isCur=p.k===curK,isBest=p.makespan===bestMs;
-            return `<tr class="${isCur?'cur':''}"><td>k=${p.k}${isCur?' (aktuell)':''}</td>`+
+            return `<tr class="${isCur?'cur':''}" data-k="${p.k}" style="cursor:pointer"><td>k=${p.k}${isCur?' (aktuell)':''}</td>`+
                 `<td class="${isBest?'best':''}">${fmtNum(p.makespan)}</td>`+
                 `<td>${fmtNum(p.timeMs)} ms</td>`+
                 `<td>${fmtNum(p.expanded)}</td>`+
                 `<td>${p.valid?'gültig':'ungültig'}</td></tr>`;
         }).join('');
         tbl.innerHTML=`<thead><tr><th>Breite</th><th>Makespan</th><th>Zeit</th><th>Expandiert</th><th>Validität</th></tr></thead><tbody>${rows}</tbody>`;
+        tbl.querySelectorAll('tbody tr').forEach(tr=>{
+            tr.onclick=()=>{state.beamK=Number(tr.dataset.k);render();};
+        });
     }
 
     let drag=null;
