@@ -59,6 +59,34 @@ public class JsspProblem {
         return new Transition(newState, scheduledOperation);
     }
 
+    public Operation jobPredecessor(Operation operation) {
+        if (operation == null ) {return null; }
+
+        for (Job job : jobs) {
+            if (job.jobId() == operation.jobId()) {
+                int i = job.operations().indexOf(operation);
+                if (i <= 0) {return null; }
+                return job.operations().get(i - 1);
+            }
+        }
+        return null;
+    }
+
+    public Operation jobSuccessor(Operation operation) {
+        if (operation == null ) { return null; }
+
+        for (Job job : jobs) {
+            if (job.jobId() == operation.jobId()) {
+                int i = job.operations().indexOf(operation);
+                if (i == -1 || i == job.operations().size()-1) { return null; }
+                return job.operations().get(i + 1);
+            }
+        }
+        return null;
+    }
+
+
+
     public List<Machine> getMachines() {
         return machines;
     }

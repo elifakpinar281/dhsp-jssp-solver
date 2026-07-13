@@ -1,5 +1,6 @@
 package at.fhv.solver.implementation.tabu;
 
+import at.fhv.model.jssp.Job;
 import at.fhv.model.jssp.Machine;
 import at.fhv.model.jssp.Operation;
 
