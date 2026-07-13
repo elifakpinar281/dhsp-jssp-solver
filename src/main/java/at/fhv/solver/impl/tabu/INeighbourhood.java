@@ -1,4 +1,4 @@
-package at.fhv.solver.implementation.tabu;
+package at.fhv.solver.impl.tabu;
 
 import java.util.List;
 

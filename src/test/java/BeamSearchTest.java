@@ -1,6 +1,6 @@
 import at.fhv.evaluation.implementation.MakespanEstimateHeuristic;
 import at.fhv.model.jssp.*;
-import at.fhv.solver.implementation.BeamSearch;
+import at.fhv.solver.impl.BeamSearch;
 import at.fhv.solver.validation.ScheduleValidator;
 import at.fhv.solver.validation.ValidationResult;
 import at.fhv.visualization.SearchStatistics;

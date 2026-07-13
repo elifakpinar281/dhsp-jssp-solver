@@ -1,11 +1,11 @@
-package at.fhv.solver.decoder.impl;
+package at.fhv.solver.impl.decoder;
 
 import at.fhv.model.jssp.Job;
 import at.fhv.model.jssp.JsspProblem;
 import at.fhv.model.jssp.Machine;
 import at.fhv.model.jssp.Operation;
 import at.fhv.solver.IStartDecoder;
-import at.fhv.solver.implementation.tabu.MachineSequences;
+import at.fhv.solver.impl.tabu.MachineSequences;
 
 import java.util.*;
 

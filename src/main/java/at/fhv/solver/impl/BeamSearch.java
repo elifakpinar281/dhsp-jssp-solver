@@ -1,4 +1,4 @@
-package at.fhv.solver.implementation;
+package at.fhv.solver.impl;
 
 import at.fhv.evaluation.IHeuristic;
 import at.fhv.model.jssp.*;

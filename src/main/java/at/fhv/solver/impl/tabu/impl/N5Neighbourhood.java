@@ -1,9 +1,9 @@
-package at.fhv.solver.implementation.tabu.impl;
+package at.fhv.solver.impl.tabu.impl;
 
 import at.fhv.model.jssp.Operation;
-import at.fhv.solver.implementation.tabu.INeighbourhood;
-import at.fhv.solver.implementation.tabu.Move;
-import at.fhv.solver.implementation.tabu.ScheduleEvaluator;
+import at.fhv.solver.impl.tabu.INeighbourhood;
+import at.fhv.solver.impl.tabu.Move;
+import at.fhv.solver.impl.tabu.ScheduleEvaluator;
 
 import java.util.ArrayList;
 import java.util.List;

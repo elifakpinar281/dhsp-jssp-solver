@@ -1,10 +1,10 @@
 import at.fhv.model.jssp.*;
 import at.fhv.solver.IStartDecoder;
-import at.fhv.solver.decoder.impl.RandomStartDecoder;
-import at.fhv.solver.implementation.tabu.INeighbourhood;
-import at.fhv.solver.implementation.tabu.ScheduleEvaluator;
-import at.fhv.solver.implementation.tabu.TabuSearch;
-import at.fhv.solver.implementation.tabu.impl.N5Neighbourhood;
+import at.fhv.solver.impl.decoder.RandomStartDecoder;
+import at.fhv.solver.impl.tabu.INeighbourhood;
+import at.fhv.solver.impl.tabu.ScheduleEvaluator;
+import at.fhv.solver.impl.TabuSearch;
+import at.fhv.solver.impl.tabu.impl.N5Neighbourhood;
 import at.fhv.solver.validation.ScheduleValidator;
 import at.fhv.solver.validation.ValidationResult;
 import org.junit.jupiter.api.Test;

@@ -1,4 +1,4 @@
-package at.fhv.solver.implementation;
+package at.fhv.solver.impl;
 
 import at.fhv.model.jssp.*;
 import at.fhv.solver.ISearchAlgorithm;

@@ -1,4 +1,4 @@
-package at.fhv.solver.implementation.tabu;
+package at.fhv.solver.impl.tabu;
 
 import at.fhv.model.jssp.*;
 

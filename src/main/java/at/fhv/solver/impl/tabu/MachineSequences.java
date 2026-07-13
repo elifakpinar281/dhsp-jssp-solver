@@ -1,7 +1,5 @@
-package at.fhv.solver.implementation.tabu;
+package at.fhv.solver.impl.tabu;
 
-import at.fhv.model.jssp.Job;
-import at.fhv.model.jssp.Machine;
 import at.fhv.model.jssp.Operation;
 
 import java.util.ArrayList;
