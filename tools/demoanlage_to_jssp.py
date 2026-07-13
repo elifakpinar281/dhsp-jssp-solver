@@ -31,6 +31,7 @@ def load_workbook_robust(path):
 COL_BAD = 2
 COL_DESC = 3
 TYPE_MIN_COLS = [4, 6, 8, 10, 12]
+TYPE_MAX_COLS = [5, 7, 9, 11, 13]
 PROPORTIONS = [0.4, 0.2, 0.1, 0.2, 0.1]
 
 N_CARRIERS = 10
@@ -49,6 +50,12 @@ def is_number(v):
     return isinstance(v, (int, float)) and not isinstance(v, bool)
 
 
+def parse_max(v):
+    if is_number(v):
+        return int(v)
+    return "inf"
+
+
 def build_task_rows(rows):
     task_rows = []
     for r in rows:
@@ -59,11 +66,15 @@ def build_task_rows(rows):
         if not (is_number(bad) or (isinstance(bad, str) and re.search(r"\d", bad))):
             continue
         mins = []
+        maxs = []
         for c in TYPE_MIN_COLS:
             v = r[c] if len(r) > c else None
             mins.append(v if is_number(v) else None)
+        for c in TYPE_MAX_COLS:
+            v = r[c] if len(r) > c else None
+            maxs.append(parse_max(v))
         if any(m is not None for m in mins):
-            task_rows.append((str(bad).strip(), str(desc).strip(), mins))
+            task_rows.append((str(bad).strip(), str(desc).strip(), mins, maxs))
     return task_rows
 
 
@@ -73,7 +84,7 @@ def main():
 
     machine_id = {}
     machine_name = {}
-    for bad, desc, _ in task_rows:
+    for bad, desc, _, _ in task_rows:
         key = bad
         if key not in machine_id:
             idx = len(machine_id)
@@ -81,14 +92,14 @@ def main():
             machine_name[idx] = f"{bad} {desc}"
 
     jobtype_ops = {t: [] for t in range(5)}
-    for bad, desc, mins in task_rows:
+    for bad, desc, mins, maxs in task_rows:
         for t in range(5):
             m = mins[t]
             if m is None:
                 continue
             if m <= 0:
                 continue
-            jobtype_ops[t].append((machine_id[bad], int(m)))
+            jobtype_ops[t].append((machine_id[bad], int(m), maxs[t]))
 
     counts = [round(p * N_CARRIERS) for p in PROPORTIONS]
     diff = N_CARRIERS - sum(counts)
@@ -104,12 +115,14 @@ def main():
     lines = []
     lines.append(f"JOBS {len(jobs)}")
     lines.append(f"MACHINES {machine_count}")
-    lines.append("# je Job:  opCount  (machine dauer) ...   -- generiert aus Demoanlage.xlsx")
+    lines.append("# je Job:  opCount  (machine  min-sec  max-sec) ...   -- generiert aus Demoanlage.xlsx")
+    lines.append("# max-sec = maximale Verweilzeit (max dwell time); 'inf' = keine Obergrenze")
     for _, ops in jobs:
         parts = [str(len(ops))]
-        for m, d in ops:
+        for m, d, mx in ops:
             parts.append(str(m))
             parts.append(str(d))
+            parts.append(str(mx))
         lines.append(" ".join(parts))
     with open("demoanlage.txt", "w") as f:
         f.write("\n".join(lines) + "\n")

@@ -3,6 +3,7 @@ package at.fhv.solver.validation;
 import at.fhv.model.jssp.*;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -20,8 +21,33 @@ public class ScheduleValidator {
         checkJobRouting(jsspProblem, scheduledOperations, violations);
         checkMachineOverlap(scheduledOperations, violations);
         checkTimeConsistency(scheduledOperations, violations);
+        checkMaxDwell(jsspProblem, scheduledOperations, violations);
 
         return new ValidationResult(violations.isEmpty(), violations);
+    }
+
+    private void checkMaxDwell(JsspProblem jsspProblem, List<ScheduledOperation> scheduledOperations, List<String> violations) {
+        for (Job job : jsspProblem.getJobs()) {
+            int jobId = job.jobId();
+            List<ScheduledOperation> jobOperations = new ArrayList<>();
+            for (ScheduledOperation scheduledOperation : scheduledOperations) {
+                if (scheduledOperation.jobId() == jobId) { jobOperations.add(scheduledOperation); }
+            }
+            jobOperations.sort(Comparator.comparingInt(ScheduledOperation::startTime));
+            List<Operation> required = job.operations();
+
+            if (jobOperations.size() != required.size()) { continue; } // Anzahl wird an anderer Stelle gemeldet
+
+            for (int i = 0; i < required.size() - 1; i++) {
+                Operation operation = required.get(i);
+                if (!operation.hasDwellLimit()) { continue; }
+                int dwell = jobOperations.get(i + 1).startTime() - jobOperations.get(i).startTime();
+                if (dwell > operation.maxDwellTime()) {
+                    violations.add("Job " + jobId + " step " + i + " (machine " + operation.machineId()
+                            + ") dwell " + dwell + " exceeds max dwell time " + operation.maxDwellTime());
+                }
+            }
+        }
     }
 
     private void checkOperationCount(JsspProblem jsspProblem, List<ScheduledOperation> scheduledOperations, List<String> violations) {

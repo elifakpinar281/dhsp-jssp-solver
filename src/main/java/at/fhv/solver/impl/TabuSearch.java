@@ -50,7 +50,7 @@ public class TabuSearch implements ISearchAlgorithm {
         MachineSequences current = startDecoder.decode(jsspProblem);
         MachineSequences best = current;
         ScheduleEvaluator.EvaluationResult currentResult = scheduleEvaluator.evaluate(current);
-        int makespanBest = currentResult.makespan();
+        int makespanBest = currentResult.dwellFeasible() ? currentResult.makespan() : Integer.MAX_VALUE;
 
         TabuList tabu = new TabuList();
 
@@ -67,10 +67,16 @@ public class TabuSearch implements ISearchAlgorithm {
             }
             Move bestMove = null;
             int bestMoveMakespan = Integer.MAX_VALUE;
+            List<Move> feasibleNeighbours = new ArrayList<>();
 
             for (Move move : neighbours) {
                 ScheduleEvaluator.EvaluationResult resultMove =
                         scheduleEvaluator.evaluateMove(current, move, currentResult.head(), currentResult.tail());
+
+                if (!resultMove.dwellFeasible()) {
+                    continue;
+                }
+                feasibleNeighbours.add(move);
 
                 int makespanMove = resultMove.makespan();
                 boolean isTabu = tabu.isTabu(move.getAttribute(), iteration);
@@ -85,8 +91,12 @@ public class TabuSearch implements ISearchAlgorithm {
                 break;
             }
 
+            if (feasibleNeighbours.isEmpty()) {
+                break;
+            }
+
             if (bestMove == null) {
-                bestMove = neighbours.get(random.nextInt(neighbours.size()));
+                bestMove = feasibleNeighbours.get(random.nextInt(feasibleNeighbours.size()));
                 bestMoveMakespan = scheduleEvaluator.evaluateMove(current, bestMove, currentResult.head(), currentResult.tail()).makespan();
             }
 

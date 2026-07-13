@@ -42,12 +42,25 @@ public class JsspProblem {
         int jobId = operation.jobId();
         int machineId = operation.machineId();
         int processingTime = operation.processingTime();
+        int opIndex = state.nextOperation()[jobId];
+
+        int startTime = Math.max(state.machineAvailableTime()[machineId], state.jobAvailableTime()[jobId]);
+
+        if (opIndex > 0) {
+            Operation predecessor = jobs.get(jobId).operations().get(opIndex - 1);
+            if (predecessor.hasDwellLimit()) {
+                int predecessorStart = state.jobAvailableTime()[jobId] - predecessor.processingTime();
+                int latestAdmissibleStart = predecessorStart + predecessor.maxDwellTime();
+                if (startTime > latestAdmissibleStart) {
+                    return null;
+                }
+            }
+        }
 
         int[] newNextOperation = state.nextOperation().clone();
         int[] newMachineAvailableTime = state.machineAvailableTime().clone();
         int[] newJobAvailableTime = state.jobAvailableTime().clone();
 
-        int startTime = Math.max(state.machineAvailableTime()[machineId], state.jobAvailableTime()[jobId]);
         int endTime = startTime+processingTime;
 
         newNextOperation[jobId] = state.nextOperation()[jobId] + 1;

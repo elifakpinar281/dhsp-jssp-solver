@@ -1,4 +1,4 @@
-package at.fhv;
+package at.fhv.experiment;
 
 import at.fhv.evaluation.IHeuristic;
 import at.fhv.evaluation.implementation.MakespanEstimateHeuristic;

@@ -75,8 +75,9 @@ public class Parser {
             for (int operationId = 0; operationId < opCount; operationId++) {
                 int machineId = nextInt(scanner, "machineId");
                 int processingTime = nextInt(scanner, "processingTime");
+                int maxDwellTime = nextMaxDwell(scanner, "maxDwellTime");
                 validateOperation(jobId, machineId, processingTime, machineCount);
-                operations.add(new Operation(operationId, jobId, machineId, processingTime));
+                operations.add(new Operation(operationId, jobId, machineId, processingTime, maxDwellTime));
             }
             jobs.add(new Job(jobId, operations));
         }
@@ -112,5 +113,21 @@ public class Parser {
             throw new InvalidInstanceException("Expected integer for " + field);
         }
         return scanner.nextInt();
+    }
+
+    private int nextMaxDwell(Scanner scanner, String field) {
+        if (!scanner.hasNext()) {
+            throw new InvalidInstanceException("Expected value for " + field);
+        }
+        String token = scanner.next();
+        if (token.equalsIgnoreCase("inf")) {
+            return Operation.NO_LIMIT;
+        }
+        try {
+            int value = Integer.parseInt(token);
+            return value < 0 ? Operation.NO_LIMIT : value;
+        } catch (NumberFormatException e) {
+            throw new InvalidInstanceException("Expected integer or 'inf' for " + field + " but got '" + token + "'");
+        }
     }
 }

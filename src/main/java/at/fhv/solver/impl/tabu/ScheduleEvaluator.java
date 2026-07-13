@@ -15,7 +15,8 @@ public class ScheduleEvaluator {
             int makespan,
             List<Operation> criticalPath,
             Map<Operation, Integer> head,
-            Map<Operation, Integer> tail
+            Map<Operation, Integer> tail,
+            boolean dwellFeasible
     ) {}
 
     public EvaluationResult evaluate(MachineSequences sequences) {
@@ -72,7 +73,25 @@ public class ScheduleEvaluator {
             }
         }
 
-        return new EvaluationResult(makespan, criticalPath, head, tail);
+        return new EvaluationResult(makespan, criticalPath, head, tail, isDwellFeasible(head));
+    }
+
+    private boolean isDwellFeasible(Map<Operation, Integer> head) {
+        for (Job job : jsspProblem.getJobs()) {
+            List<Operation> operations = job.operations();
+            for (int i = 0; i < operations.size() - 1; i++) {
+                Operation operation = operations.get(i);
+                if (!operation.hasDwellLimit()) {
+                    continue;
+                }
+                Operation successor = operations.get(i + 1);
+                int dwell = head.get(successor) - head.get(operation);
+                if (dwell > operation.maxDwellTime()) {
+                    return false;
+                }
+            }
+        }
+        return true;
     }
 
     private List<Operation> topologicalOrder(MachineSequences sequences) {
@@ -118,12 +137,12 @@ public class ScheduleEvaluator {
             if (machineSuccessors != null) {successors.add(machineSuccessors);}
 
             for (Operation next : successors) {
-                    inDegree.put(next, inDegree.get(next) - 1);
-                    if (inDegree.get(next) == 0) {
-                        queue.add(next);
-                    }
+                inDegree.put(next, inDegree.get(next) - 1);
+                if (inDegree.get(next) == 0) {
+                    queue.add(next);
                 }
             }
+        }
         if (result.size() != operations.size()) {
             throw new IllegalStateException("Cycle detected");
         }
@@ -202,7 +221,7 @@ public class ScheduleEvaluator {
             }
         }
 
-        return new EvaluationResult(makespan, criticalPath, head, tail);
+        return new EvaluationResult(makespan, criticalPath, head, tail, isDwellFeasible(head));
     }
 
     private Set<Operation> forwardReachable(Set<Operation> start, MachineSequences sequences) {
@@ -306,7 +325,6 @@ public class ScheduleEvaluator {
         if (result.size() != operations.size()) {
             throw new IllegalStateException("Cycle detected");
         }
-
         return result;
     }
 }

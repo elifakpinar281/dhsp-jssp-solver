@@ -1,4 +1,4 @@
-package at.fhv.visualization;
+package at.fhv.experiment;
 
 import at.fhv.parser.Parser;
 import at.fhv.evaluation.IHeuristic;
@@ -7,6 +7,7 @@ import at.fhv.model.jssp.JsspProblem;
 import at.fhv.model.jssp.Schedule;
 import at.fhv.solver.impl.BeamSearch;
 import at.fhv.solver.validation.ScheduleValidator;
+import at.fhv.visualization.SearchStatistics;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
