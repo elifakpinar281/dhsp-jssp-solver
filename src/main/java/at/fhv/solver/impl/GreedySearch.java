@@ -80,6 +80,7 @@ public class GreedySearch implements ISearchAlgorithm {
         List<Node> children = new ArrayList<>();
         for (Operation operation : problem.getAvailableOperations(node.state())) {
             Transition transition = problem.applyOperation(node.state(), operation);
+            if (transition == null) {continue;}
             double heuristicValue = heuristic.evaluate(transition.state());
             children.add(new Node(transition.state(), node, heuristicValue, transition.scheduledOperation()));
         }

@@ -7,7 +7,7 @@ public class RenderCharts {
     private static final String DIR = "docs/assets";
     private static final String SUFFIX = "-samples.csv";
 
-    public static void main(String[] args) throws IOException {
+    public static void run(String[] args) throws IOException {
         File assets = new File(DIR);
 
         renderAllInFolder(assets);

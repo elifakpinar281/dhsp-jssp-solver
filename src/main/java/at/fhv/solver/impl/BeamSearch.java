@@ -83,6 +83,7 @@ public class BeamSearch implements ISearchAlgorithm {
         List<Node> children = new ArrayList<>();
         for (Operation operation : jsspProblem.getAvailableOperations(node.state())) {
             Transition transition = jsspProblem.applyOperation(node.state(), operation);
+            if (transition == null ) {continue;}
             double heuristicValue = heuristic.evaluate(transition.state());
             children.add(new Node(transition.state(), node, heuristicValue, transition.scheduledOperation()));
         }

@@ -115,8 +115,6 @@ def main():
     lines = []
     lines.append(f"JOBS {len(jobs)}")
     lines.append(f"MACHINES {machine_count}")
-    lines.append("# je Job:  opCount  (machine  min-sec  max-sec) ...   -- generiert aus Demoanlage.xlsx")
-    lines.append("# max-sec = maximale Verweilzeit (max dwell time); 'inf' = keine Obergrenze")
     for _, ops in jobs:
         parts = [str(len(ops))]
         for m, d, mx in ops:
