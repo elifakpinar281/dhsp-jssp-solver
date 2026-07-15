@@ -1,0 +1,20 @@
+{
+ "runId": "20260715-114438_demoanlage_GREEDY",
+ "timestamp": "2026-07-15T11:44:38.929541200",
+ "instance": "benchmarks/demoanlage.txt",
+ "instanceKey": "demoanlage",
+ "algorithm": "GREEDY",
+ "params": {},
+"jobCount": 10,
+"machineCount": 35,
+"makespan": null,
+"valid": false,
+"timeMs": 3532,
+"peakHeap": 1376,
+"expanded": 400000,
+"reached": 3235990,
+"maxDepth": 64,
+ "violations": [],
+ "iterations": null,
+ "schedule": null
+}
