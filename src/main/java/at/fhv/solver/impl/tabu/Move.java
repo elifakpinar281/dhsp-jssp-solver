@@ -8,14 +8,24 @@ public record Move (
         int machineId
 ){
     public record MoveAttribute(
+            int jobA,
             int operationA,
+            int jobB,
             int operationB,
             int machineId
     ) {}
 
     public MoveAttribute getAttribute() {
-        int idA = operationA.operationId();
-        int idB = operationB.operationId();
-        return new MoveAttribute( Math.min(idA, idB), Math.max(idA, idB), machineId );
+        Operation first = operationA;
+        Operation second = operationB;
+
+        boolean swap = operationA.jobId() > operationB.jobId() || (operationA.jobId() == operationB.jobId() && operationA.operationId() > operationB.operationId());
+
+        if (swap) {
+            first = operationB;
+            second = operationA;
+        }
+
+        return new MoveAttribute(first.jobId(), first.operationId(), second.jobId(), second.operationId(), machineId);
     }
 }

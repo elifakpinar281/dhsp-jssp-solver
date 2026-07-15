@@ -11,6 +11,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Scanner;
 
@@ -42,7 +43,7 @@ public class Parser {
         int jobCount = nextInt(scanner, "jobCount");
         int machineCount = nextInt(scanner, "machineCount");
 
-        List<Machine> machines = buildMachines(machineCount);
+        List<Machine> machines = buildMachines(machineCount, defaultCapacities(machineCount));
         List<Job> jobs = new ArrayList<>();
 
         for (int jobId = 0; jobId < jobCount; jobId++) {
@@ -65,7 +66,8 @@ public class Parser {
         expectKeyword(scanner, "MACHINES");
         int machineCount = nextInt(scanner, "machineCount");
 
-        List<Machine> machines = buildMachines(machineCount);
+        int[] capacities = parseCapacities(scanner, machineCount);
+        List<Machine> machines = buildMachines(machineCount, capacities);
         List<Job> jobs = new ArrayList<>();
 
         for (int jobId = 0; jobId < jobCount; jobId++) {
@@ -77,6 +79,7 @@ public class Parser {
                 int processingTime = nextInt(scanner, "processingTime");
                 int maxDwellTime = nextMaxDwell(scanner, "maxDwellTime");
                 validateOperation(jobId, machineId, processingTime, machineCount);
+                validateDwell(jobId, operationId, processingTime, maxDwellTime);
                 operations.add(new Operation(operationId, jobId, machineId, processingTime, maxDwellTime));
             }
             jobs.add(new Job(jobId, operations));
@@ -84,10 +87,33 @@ public class Parser {
         return new JsspProblem(machines, jobs);
     }
 
-    private List<Machine> buildMachines(int machineCount) {
+    private int[] parseCapacities(Scanner scanner, int machineCount) {
+        int[] capacities = defaultCapacities(machineCount);
+        if (!scanner.hasNext("(?i)CAPACITIES")) {
+            return capacities;
+        }
+
+        scanner.next();
+        for (int i = 0; i < machineCount; i++) {
+            int capacity = nextInt(scanner, "capacity for machine " + i);
+            if (capacity < 1) {
+                throw new InvalidInstanceException("Machine " + i + ": capacity must be >= 1 but was " + capacity);
+            }
+            capacities[i] = capacity;
+        }
+        return capacities;
+    }
+
+    private int[] defaultCapacities(int machineCount) {
+        int[] capacities = new int[machineCount];
+        Arrays.fill(capacities, 1);
+        return capacities;
+    }
+
+    private List<Machine> buildMachines(int machineCount, int[] capacities) {
         List<Machine> machines = new ArrayList<>();
-        for (int mcount = 0; mcount < machineCount; mcount++) {
-            machines.add(new Machine(mcount));
+        for (int machineId = 0; machineId < machineCount; machineId++) {
+            machines.add(new Machine(machineId, capacities[machineId]));
         }
         return machines;
     }
@@ -98,6 +124,12 @@ public class Parser {
         }
         if (processingTime < 0) {
             throw new InvalidInstanceException("Job " + jobId + ": negative processingTime " + processingTime);
+        }
+    }
+
+    private void validateDwell(int jobId, int operationId, int processingTime, int maxDwellTime) {
+        if (maxDwellTime != Operation.NO_LIMIT && maxDwellTime < processingTime) {
+            throw new InvalidInstanceException("Job " + jobId + " step " + operationId + ": maxDwellTime " + maxDwellTime + " is smaller than processingTime " + processingTime + " (max sec must include min sec)");
         }
     }
 

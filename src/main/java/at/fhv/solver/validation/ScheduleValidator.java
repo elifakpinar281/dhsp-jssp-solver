@@ -19,7 +19,7 @@ public class ScheduleValidator {
 
         checkOperationCount(jsspProblem, scheduledOperations, violations);
         checkJobRouting(jsspProblem, scheduledOperations, violations);
-        checkMachineOverlap(scheduledOperations, violations);
+        checkMachineOverlap(jsspProblem, scheduledOperations, violations);
         checkTimeConsistency(scheduledOperations, violations);
         checkMaxDwell(jsspProblem, scheduledOperations, violations);
 
@@ -41,7 +41,8 @@ public class ScheduleValidator {
             for (int i = 0; i < required.size() - 1; i++) {
                 Operation operation = required.get(i);
                 if (!operation.hasDwellLimit()) { continue; }
-                int dwell = jobOperations.get(i + 1).startTime() - jobOperations.get(i).endTime();
+
+                int dwell = jobOperations.get(i + 1).startTime() - jobOperations.get(i).startTime();
                 if (dwell > operation.maxDwellTime()) {
                     violations.add("Job " + jobId + " step " + i + " (machine " + operation.machineId() + ") dwell " + dwell + " exceeds max dwell time " + operation.maxDwellTime());
                 }
@@ -52,9 +53,11 @@ public class ScheduleValidator {
     private void checkOperationCount(JsspProblem jsspProblem, List<ScheduledOperation> scheduledOperations, List<String> violations) {
         int expected = 0;
         for (Job job : jsspProblem.getJobs()) {
-            expected = expected+job.operations().size();
+            expected = expected + job.operations().size();
         }
-        if (scheduledOperations.size() != expected) { violations.add("Mismatch, expected: " + expected + ", scheduled: " + scheduledOperations.size()); }
+        if (scheduledOperations.size() != expected) {
+            violations.add("Mismatch, expected: " + expected + ", scheduled: " + scheduledOperations.size());
+        }
     }
 
     private void checkJobRouting(JsspProblem jsspProblem, List<ScheduledOperation> scheduledOperations, List<String> violations) {
@@ -64,7 +67,7 @@ public class ScheduleValidator {
             for (ScheduledOperation scheduledOperation : scheduledOperations) {
                 if (scheduledOperation.jobId() == jobid) { jobOperations.add(scheduledOperation); }
             }
-            jobOperations.sort((j1, j2) -> Integer.compare(j1.startTime(), j2.startTime()));
+            jobOperations.sort(Comparator.comparingInt(ScheduledOperation::startTime));
             List<Operation> required = job.operations();
 
             if (jobOperations.size() != required.size()) {
@@ -81,7 +84,7 @@ public class ScheduleValidator {
                     violations.add("Job " + jobid + " step " + i + " runs on " + scheduledOperation.machineId() + " but should run on " + expected.machineId());
                 }
 
-                int duration = scheduledOperation.endTime()-scheduledOperation.startTime();
+                int duration = scheduledOperation.endTime() - scheduledOperation.startTime();
                 if (duration != expected.processingTime()) {
                     violations.add("Job " + jobid + " step " + i + "- duration " + duration + ", processing time should be " + expected.processingTime());
                 }
@@ -97,11 +100,11 @@ public class ScheduleValidator {
     private void checkTimeConsistency(List<ScheduledOperation> scheduledOperations, List<String> violations) {
         for (ScheduledOperation operation : scheduledOperations) {
             if (operation.startTime() < 0) {
-                violations.add("Operation/Job " + operation.jobId() + " has a negative starttime of: "  + operation.startTime());
+                violations.add("Operation/Job " + operation.jobId() + " has a negative starttime of: " + operation.startTime());
             }
 
             if (operation.endTime() < 0) {
-                violations.add("Operation/Job " + operation.jobId() + " has a negative endtime of: "  + operation.endTime());
+                violations.add("Operation/Job " + operation.jobId() + " has a negative endtime of: " + operation.endTime());
             }
 
             if (operation.startTime() > operation.endTime()) {
@@ -110,41 +113,30 @@ public class ScheduleValidator {
         }
     }
 
-    private void checkMachineOverlap(List<ScheduledOperation> scheduledOperations, List<String> violations) {
+    private void checkMachineOverlap(JsspProblem jsspProblem, List<ScheduledOperation> scheduledOperations, List<String> violations) {
         Map<Integer, List<ScheduledOperation>> planned = new HashMap<>();
         for (ScheduledOperation scheduledOperation : scheduledOperations) {
-            int machine = scheduledOperation.machineId();
-            if (planned.containsKey(machine)) {
-                planned.get(machine).add(scheduledOperation);
-            } else {
-                List<ScheduledOperation> machineOperations = new ArrayList<>();
-                machineOperations.add(scheduledOperation);
-                planned.put(machine, machineOperations);
-            }
+            planned.computeIfAbsent(scheduledOperation.machineId(), key -> new ArrayList<>()).add(scheduledOperation);
         }
 
         for (Map.Entry<Integer, List<ScheduledOperation>> entry : planned.entrySet()) {
+            int machineId = entry.getKey();
+            int capacity = jsspProblem.capacityOf(machineId);
             List<ScheduledOperation> machineOperations = entry.getValue();
 
-            for (int i = 0; i < machineOperations.size(); i++ ) {
-                ScheduledOperation op1 = machineOperations.get(i);
-                for (int j = i + 1; j < machineOperations.size(); j++) {
-                    ScheduledOperation op2 = machineOperations.get(j);
+            for (ScheduledOperation reference : machineOperations) {
+                int time = reference.startTime();
+                int concurrent = 0;
 
-                    if (op1.startTime() < op2.endTime() && op2.startTime() < op1.endTime()) {
-                        violations.add("Overlap 1: " + op1 + ", and Operation 2: " + op2 + " overlap in time");
+                for (ScheduledOperation other : machineOperations) {
+                    if (other.startTime() <= time && time < other.endTime()) { concurrent++; }
+                }
 
-                    }
+                if (concurrent > capacity) {
+                    violations.add("Machine " + machineId + " has " + concurrent + " concurrent operations at time " + time + " but capacity is " + capacity);
+                    break;
                 }
             }
         }
-    }
-
-    public static int makespan(Schedule schedule) {
-        int makespan = 0;
-        for (ScheduledOperation scheduledOperation : schedule.operations()) {
-            if (scheduledOperation.endTime() > makespan) { makespan = scheduledOperation.endTime(); }
-        }
-        return makespan;
     }
 }

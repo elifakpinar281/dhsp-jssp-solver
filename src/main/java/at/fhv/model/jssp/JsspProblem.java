@@ -3,15 +3,75 @@ package at.fhv.model.jssp;
 import at.fhv.solver.State;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 public class JsspProblem {
-    private List<Machine> machines;
-    private List<Job> jobs;
+    private final List<Machine> machines;
+    private final List<Job> jobs;
+
+    private final int[] capacity;
+    private final int[] bathOffset;
+    private final int totalBaths;
+
+    private final Map<Operation, Operation> jobPredecessor;
+    private final Map<Operation, Operation> jobSuccessor;
 
     public JsspProblem(List<Machine> machines, List<Job> jobs) {
         this.machines = machines;
         this.jobs = jobs;
+
+        this.capacity = new int[machines.size()];
+        this.bathOffset = new int[machines.size()];
+
+        int offset = 0;
+        for (int i = 0; i < machines.size(); i++) {
+            capacity[machines.get(i).machineId()] = machines.get(i).capacity();
+        }
+        for (int machineId = 0; machineId < machines.size(); machineId++) {
+            bathOffset[machineId] = offset;
+            offset += capacity[machineId];
+        }
+        this.totalBaths = offset;
+
+        this.jobPredecessor = new HashMap<>();
+        this.jobSuccessor = new HashMap<>();
+        for (Job job : jobs) {
+            List<Operation> operations = job.operations();
+            for (int i = 0; i < operations.size(); i++) {
+                if (i > 0) { jobPredecessor.put(operations.get(i), operations.get(i - 1)); }
+                if (i < operations.size() - 1) { jobSuccessor.put(operations.get(i), operations.get(i + 1)); }
+            }
+        }
+    }
+
+    public int capacityOf(int machineId) {
+        return capacity[machineId];
+    }
+
+    public int bathOffset(int machineId) {
+        return bathOffset[machineId];
+    }
+
+    public int totalBaths() {
+        return totalBaths;
+    }
+
+    public int earliestFreeBath(State state, int machineId) {
+        int offset = bathOffset[machineId];
+        int best = offset;
+
+        for (int bath = offset + 1; bath < offset + capacity[machineId]; bath++) {
+            if (state.bathAvailableTime()[bath] < state.bathAvailableTime()[best]) {
+                best = bath;
+            }
+        }
+        return best;
+    }
+
+    public int earliestBathTime(State state, int machineId) {
+        return state.bathAvailableTime()[earliestFreeBath(state, machineId)];
     }
 
     public boolean isGoal(State state) {
@@ -31,8 +91,7 @@ public class JsspProblem {
             int nextOpIndex = state.nextOperation()[jobId];
 
             if (nextOpIndex < job.operations().size()) {
-                Operation nextOperation = job.operations().get(nextOpIndex);
-                availableOperations.add(nextOperation);
+                availableOperations.add(job.operations().get(nextOpIndex));
             }
         }
         return availableOperations;
@@ -41,10 +100,10 @@ public class JsspProblem {
     public Transition applyOperation(State state, Operation operation) {
         int jobId = operation.jobId();
         int machineId = operation.machineId();
-        int processingTime = operation.processingTime();
         int opIndex = state.nextOperation()[jobId];
 
-        int startTime = Math.max(state.machineAvailableTime()[machineId], state.jobAvailableTime()[jobId]);
+        int bath = earliestFreeBath(state, machineId);
+        int startTime = Math.max(state.bathAvailableTime()[bath], state.jobAvailableTime()[jobId]);
 
         if (opIndex > 0) {
             Operation predecessor = jobs.get(jobId).operations().get(opIndex - 1);
@@ -57,48 +116,30 @@ public class JsspProblem {
             }
         }
 
+        int endTime = startTime + operation.processingTime();
+
         int[] newNextOperation = state.nextOperation().clone();
-        int[] newMachineAvailableTime = state.machineAvailableTime().clone();
+        int[] newBathAvailableTime = state.bathAvailableTime().clone();
         int[] newJobAvailableTime = state.jobAvailableTime().clone();
 
-        int endTime = startTime+processingTime;
-
-        newNextOperation[jobId] = state.nextOperation()[jobId] + 1;
-        newMachineAvailableTime[machineId] = endTime;
+        newNextOperation[jobId] = opIndex + 1;
+        newBathAvailableTime[bath] = endTime;
         newJobAvailableTime[jobId] = endTime;
 
-        State newState = new State(newNextOperation, newMachineAvailableTime, newJobAvailableTime);
+        State newState = new State(newNextOperation, newBathAvailableTime, newJobAvailableTime);
         ScheduledOperation scheduledOperation = new ScheduledOperation(jobId, machineId, startTime, endTime);
         return new Transition(newState, scheduledOperation);
     }
 
     public Operation jobPredecessor(Operation operation) {
-        if (operation == null ) {return null; }
-
-        for (Job job : jobs) {
-            if (job.jobId() == operation.jobId()) {
-                int i = job.operations().indexOf(operation);
-                if (i <= 0) {return null; }
-                return job.operations().get(i - 1);
-            }
-        }
-        return null;
+        if (operation == null) { return null; }
+        return jobPredecessor.get(operation);
     }
 
     public Operation jobSuccessor(Operation operation) {
-        if (operation == null ) { return null; }
-
-        for (Job job : jobs) {
-            if (job.jobId() == operation.jobId()) {
-                int i = job.operations().indexOf(operation);
-                if (i == -1 || i == job.operations().size()-1) { return null; }
-                return job.operations().get(i + 1);
-            }
-        }
-        return null;
+        if (operation == null) { return null; }
+        return jobSuccessor.get(operation);
     }
-
-
 
     public List<Machine> getMachines() {
         return machines;
