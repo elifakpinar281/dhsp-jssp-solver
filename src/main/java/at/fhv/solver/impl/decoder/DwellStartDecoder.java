@@ -28,12 +28,14 @@ public class DwellStartDecoder implements IStartDecoder {
     public MachineSequences decode(JsspProblem jsspProblem) {
         int jobCount = jsspProblem.getJobs().size();
         int[] nextOperation = new int[jobCount];
-        int[] machineAvailableTime = new int[jsspProblem.getMachines().size()];
+        int[] bathAvailableTime = new int[jsspProblem.totalBaths()];
         int[] jobAvailableTime = new int[jobCount];
 
         Map<Integer, List<Operation>> order = new HashMap<>();
-        for(Machine machine : jsspProblem.getMachines()) {
+        Map<Integer, Integer> capacities = new HashMap<>();
+        for (Machine machine : jsspProblem.getMachines()) {
             order.put(machine.machineId(), new ArrayList<>());
+            capacities.put(machine.machineId(), machine.capacity());
         }
 
         int totalOperations = 0;
@@ -50,7 +52,7 @@ public class DwellStartDecoder implements IStartDecoder {
                 if (id >= job.operations().size()) { continue; }
 
                 Operation candidate = job.operations().get(id);
-                int earliestStart = Math.max(machineAvailableTime[candidate.machineId()], jobAvailableTime[jobId]);
+                int earliestStart = Math.max(earliestBathTime(jsspProblem, bathAvailableTime, candidate.machineId()), jobAvailableTime[jobId]);
                 Integer remainingDwell = dwell(job, id, jobAvailableTime[jobId], earliestStart);
                 boolean atRisk = remainingDwell != null && remainingDwell <= riskFactor * candidate.processingTime();
                 candidates.add(new Candidate(job, candidate, remainingDwell == null ? Integer.MAX_VALUE : remainingDwell, atRisk));
@@ -61,16 +63,31 @@ public class DwellStartDecoder implements IStartDecoder {
             Candidate chosen = pick(candidates);
             int jobId = chosen.job().jobId();
             Operation operation = chosen.operation();
-            int earliestStart = Math.max(machineAvailableTime[operation.machineId()], jobAvailableTime[jobId]);
+            int bath = earliestFreeBath(jsspProblem, bathAvailableTime, operation.machineId());
+            int earliestStart = Math.max(bathAvailableTime[bath], jobAvailableTime[jobId]);
             int endTime = earliestStart + operation.processingTime();
 
             order.get(operation.machineId()).add(operation);
             nextOperation[jobId]++;
-            machineAvailableTime[operation.machineId()] = endTime;
+            bathAvailableTime[bath] = endTime;
             jobAvailableTime[jobId] = endTime;
         }
-        return new MachineSequences(order);
+        return new MachineSequences(order, capacities);
 
+    }
+
+    private int earliestFreeBath(JsspProblem jsspProblem, int[] bathAvailableTime, int machineId) {
+        int offset = jsspProblem.bathOffset(machineId);
+        int best = offset;
+
+        for (int bath = offset + 1; bath < offset + jsspProblem.capacityOf(machineId); bath++) {
+            if (bathAvailableTime[bath] < bathAvailableTime[best]) { best = bath; }
+        }
+        return best;
+    }
+
+    private int earliestBathTime(JsspProblem jsspProblem, int[] bathAvailableTime, int machineId) {
+        return bathAvailableTime[earliestFreeBath(jsspProblem, bathAvailableTime, machineId)];
     }
 
     private Candidate pick(List<Candidate> candidates) {
@@ -91,7 +108,8 @@ public class DwellStartDecoder implements IStartDecoder {
         Operation predecessor = job.operations().get(opIndex - 1);
         if (!predecessor.hasDwellLimit()) { return null; }
 
-        int deadline = jobAvailableTime + predecessor.maxDwellTime();
+        int predecessorStart = jobAvailableTime - predecessor.processingTime();
+        int deadline = predecessorStart + predecessor.maxDwellTime();
         return deadline - earliestStart;
     }
 

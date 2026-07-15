@@ -74,9 +74,9 @@ public class BeamSearch implements ISearchAlgorithm {
 
     private State createInitialState(JsspProblem jsspProblem) {
         int[] nextOperation = new int[jsspProblem.getJobs().size()];
-        int[] machineAvailableTime = new int[jsspProblem.getMachines().size()];
+        int[] bathAvailableTime = new int[jsspProblem.totalBaths()];
         int[] jobAvailableTime = new int[jsspProblem.getJobs().size()];
-        return new State(nextOperation, machineAvailableTime, jobAvailableTime);
+        return new State(nextOperation, bathAvailableTime, jobAvailableTime);
     }
 
     private List<Node> expand(Node node, JsspProblem jsspProblem) {

@@ -71,9 +71,9 @@ public class GreedySearch implements ISearchAlgorithm {
 
     private State createInitialState(JsspProblem problem) {
         int[] nextOperation = new int[problem.getJobs().size()];
-        int[] machineAvailableTime = new int[problem.getMachines().size()];
+        int[] bathAvailableTime = new int[problem.totalBaths()];
         int[] jobAvailableTime = new int[problem.getJobs().size()];
-        return new State(nextOperation, machineAvailableTime, jobAvailableTime);
+        return new State(nextOperation, bathAvailableTime, jobAvailableTime);
     }
 
     private List<Node> expand(Node node, JsspProblem problem) {

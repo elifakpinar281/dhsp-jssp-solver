@@ -28,9 +28,11 @@ public class RandomStartDecoder implements IStartDecoder {
         int[] nextOperation = new int[problem.getJobs().size()];
 
         Map<Integer, List<Operation>> order = new HashMap<>();
+        Map<Integer, Integer> capacities = new HashMap<>();
 
         for (Machine machine : problem.getMachines()) {
             order.put(machine.machineId(), new ArrayList<>());
+            capacities.put(machine.machineId(), machine.capacity());
         }
 
         for (int jobId : jobSequence) {
@@ -40,6 +42,6 @@ public class RandomStartDecoder implements IStartDecoder {
             nextOperation[jobId]++;
         }
 
-        return new MachineSequences(order);
+        return new MachineSequences(order, capacities);
     }
 }

@@ -48,9 +48,10 @@ public class MakespanEstimateHeuristic implements IHeuristic {
         Operation predecessor = operations.get(nextIndex - 1);
         if (!predecessor.hasDwellLimit()) { return 0.0; }
         Operation nextOperation = operations.get(nextIndex);
-        int earliestStart = Math.max(jobAvailable, state.machineAvailableTime()[nextOperation.machineId()]);
+        int earliestStart = Math.max(jobAvailable, jsspProblem.earliestBathTime(state, nextOperation.machineId()));
 
-        int deadline = jobAvailable + predecessor.maxDwellTime();
+        int predecessorStart = jobAvailable - predecessor.processingTime();
+        int deadline = predecessorStart + predecessor.maxDwellTime();
         int remainingDwell = deadline - earliestStart;
 
         if (remainingDwell <= 0) { return weight * 10000;}

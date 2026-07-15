@@ -180,7 +180,7 @@ public class Main {
         List<String> violations = new ArrayList<>();
         if (schedule != null) {
             ValidationResult result = validator.validateSchedule(problem, schedule);
-            makespan = ScheduleValidator.makespan(schedule);
+            makespan = ScheduleEvaluator.ma.(schedule);
             valid = result.valid();
             violations = result.violations();
         }
@@ -206,13 +206,13 @@ public class Main {
                 IStartDecoder decoder = new DwellStartDecoder(new Random(seed));
 
                 TabuSearch tabuSearch = new TabuSearch(
-                                evaluator,
-                                neighbourhood,
-                                (Integer) params.get("tenure"),
-                                (Integer) params.get("noImprove"),
-                                decoder,
-                                seed
-                        ).withVerbose(false);
+                        evaluator,
+                        neighbourhood,
+                        (Integer) params.get("tenure"),
+                        (Integer) params.get("noImprove"),
+                        decoder,
+                        seed
+                ).withVerbose(false);
                 tabuRef[0] = tabuSearch;
                 return tabuSearch;
             default:
