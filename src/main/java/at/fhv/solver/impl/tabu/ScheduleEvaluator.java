@@ -77,6 +77,25 @@ public class ScheduleEvaluator {
 
     public record DwellViolation(Operation operation, int dwell, int maxDwell, int excess) {}
 
+    public record QuickResult(boolean feasible, int makespan) {}
+
+    public QuickResult quickEvaluate(MachineSequences sequences) {
+        if (operationCount == 0) { return new QuickResult(true, 0); }
+
+        int[] machinePredecessor = new int[operationCount];
+        int[] machineSuccessor = new int[operationCount];
+        buildMachineLinks(sequences, machinePredecessor, machineSuccessor);
+
+        int[] start = solveWithTimeLags(machinePredecessor, machineSuccessor);
+        if (start == null) { return new QuickResult(false, Integer.MAX_VALUE); }
+
+        int makespan = 0;
+        for (int i = 0; i < operationCount; i++) {
+            makespan = Math.max(makespan, start[i] + processingTime[i]);
+        }
+        return new QuickResult(true, makespan);
+    }
+
     public EvaluationResult evaluate(MachineSequences sequences) {
         if (operationCount == 0) {
             return new EvaluationResult(0, new ArrayList<>(), new HashMap<>(), new HashMap<>(), new ArrayList<>());
@@ -140,8 +159,8 @@ public class ScheduleEvaluator {
             inQueue[i] = true;
         }
 
-        int[] targets = new int[3];
-        int[] weights = new int[3];
+        int[] targets = new int[4];
+        int[] weights = new int[4];
 
         while (queueSize > 0) {
             int current = queue[queueHead];
@@ -167,6 +186,12 @@ public class ScheduleEvaluator {
             if (predecessor != NONE && maxDwellTime[predecessor] != Operation.NO_LIMIT) {
                 targets[arcCount] = predecessor;
                 weights[arcCount] = -maxDwellTime[predecessor];
+                arcCount++;
+            }
+
+            if (jsspProblem.isBlocking() && predecessor != NONE && machineSuccessor[predecessor] != NONE) {
+                targets[arcCount] = machineSuccessor[predecessor];
+                weights[arcCount] = 0;
                 arcCount++;
             }
 
@@ -292,6 +317,15 @@ public class ScheduleEvaluator {
                 }
             }
 
+            if (previous == NONE && jsspProblem.isBlocking()) {
+                int machine = machinePredecessor[current];
+                if (machine != NONE && jobSuccessor[machine] != NONE
+                        && start[jobSuccessor[machine]] == start[current]) {
+                    previous = jobSuccessor[machine];
+                }
+            }
+
+            if (previous == current) { break; }
             current = previous;
         }
 

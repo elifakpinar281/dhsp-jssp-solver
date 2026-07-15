@@ -1,117 +1,106 @@
 package at.fhv.solver.impl.decoder;
 
-import at.fhv.model.jssp.Job;
-import at.fhv.model.jssp.JsspProblem;
-import at.fhv.model.jssp.Machine;
-import at.fhv.model.jssp.Operation;
+import at.fhv.model.jssp.*;
 import at.fhv.solver.IStartDecoder;
+import at.fhv.solver.State;
 import at.fhv.solver.impl.tabu.MachineSequences;
 
 import java.util.*;
 
 public class DwellStartDecoder implements IStartDecoder {
     private final Random random;
-    private final double riskFactor;
     private final double restricted;
 
     public DwellStartDecoder(Random random) {
-        this(random, 1.0, 0.34);
+        this(random, 0.34);
     }
 
     public DwellStartDecoder(Random random, double riskFactor, double restricted) {
+        this(random, restricted);
+    }
+
+    public DwellStartDecoder(Random random, double restricted) {
         this.random = random;
-        this.riskFactor = riskFactor;
         this.restricted = restricted;
     }
 
+    private record Candidate(Operation operation, Transition transition, int completion) {}
+
+    private static final int MAX_ATTEMPTS = 20;
+
     @Override
     public MachineSequences decode(JsspProblem jsspProblem) {
-        int jobCount = jsspProblem.getJobs().size();
-        int[] nextOperation = new int[jobCount];
-        int[] bathAvailableTime = new int[jsspProblem.totalBaths()];
-        int[] jobAvailableTime = new int[jobCount];
+        for (int attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+            MachineSequences sequences = decodeOnce(jsspProblem);
+            if (sequences != null) { return sequences; }
+        }
+        throw new IllegalStateException("No feasible start solution found after " + MAX_ATTEMPTS + " attempts");
+    }
 
-        Map<Integer, List<Operation>> order = new HashMap<>();
+    private MachineSequences decodeOnce(JsspProblem jsspProblem) {
+        Map<Integer, List<Placed>> placed = new HashMap<>();
         Map<Integer, Integer> capacities = new HashMap<>();
         for (Machine machine : jsspProblem.getMachines()) {
-            order.put(machine.machineId(), new ArrayList<>());
+            placed.put(machine.machineId(), new ArrayList<>());
             capacities.put(machine.machineId(), machine.capacity());
         }
 
-        int totalOperations = 0;
-        for (Job job : jsspProblem.getJobs()) {
-            totalOperations += job.operations().size();
-        }
+        State state = createInitialState(jsspProblem);
 
-        for (int scheduled = 0; scheduled < totalOperations; scheduled++) {
+        while (!jsspProblem.isGoal(state)) {
             List<Candidate> candidates = new ArrayList<>();
 
-            for (Job job : jsspProblem.getJobs()) {
-                int jobId = job.jobId();
-                int id = nextOperation[jobId];
-                if (id >= job.operations().size()) { continue; }
+            for (Operation operation : jsspProblem.getAvailableOperations(state)) {
+                Transition transition = jsspProblem.applyOperation(state, operation);
+                if (transition == null) { continue; }
 
-                Operation candidate = job.operations().get(id);
-                int earliestStart = Math.max(earliestBathTime(jsspProblem, bathAvailableTime, candidate.machineId()), jobAvailableTime[jobId]);
-                Integer remainingDwell = dwell(job, id, jobAvailableTime[jobId], earliestStart);
-                boolean atRisk = remainingDwell != null && remainingDwell <= riskFactor * candidate.processingTime();
-                candidates.add(new Candidate(job, candidate, remainingDwell == null ? Integer.MAX_VALUE : remainingDwell, atRisk));
+                List<ScheduledOperation> scheduled = transition.scheduledOperations();
+                int completion = scheduled.get(scheduled.size() - 1).endTime();
+                candidates.add(new Candidate(operation, transition, completion));
             }
 
-            if (candidates.isEmpty()) {break;}
+            if (candidates.isEmpty()) { return null; }
 
             Candidate chosen = pick(candidates);
-            int jobId = chosen.job().jobId();
-            Operation operation = chosen.operation();
-            int bath = earliestFreeBath(jsspProblem, bathAvailableTime, operation.machineId());
-            int earliestStart = Math.max(bathAvailableTime[bath], jobAvailableTime[jobId]);
-            int endTime = earliestStart + operation.processingTime();
+            List<Operation> chain = jsspProblem.dwellChain(chosen.operation().jobId(), state.nextOperation()[chosen.operation().jobId()]);
+            List<ScheduledOperation> scheduled = chosen.transition().scheduledOperations();
 
-            order.get(operation.machineId()).add(operation);
-            nextOperation[jobId]++;
-            bathAvailableTime[bath] = endTime;
-            jobAvailableTime[jobId] = endTime;
+            for (int i = 0; i < chain.size(); i++) {
+                placed.get(chain.get(i).machineId()).add(new Placed(chain.get(i), scheduled.get(i).startTime()));
+            }
+            state = chosen.transition().state();
+        }
+
+        Map<Integer, List<Operation>> order = new HashMap<>();
+        for (Map.Entry<Integer, List<Placed>> entry : placed.entrySet()) {
+            List<Placed> machineOperations = new ArrayList<>(entry.getValue());
+            machineOperations.sort(Comparator.comparingInt(Placed::startTime));
+
+            List<Operation> operations = new ArrayList<>();
+            for (Placed placedOperation : machineOperations) {
+                operations.add(placedOperation.operation());
+            }
+            order.put(entry.getKey(), operations);
         }
         return new MachineSequences(order, capacities);
-
     }
 
-    private int earliestFreeBath(JsspProblem jsspProblem, int[] bathAvailableTime, int machineId) {
-        int offset = jsspProblem.bathOffset(machineId);
-        int best = offset;
+    private record Placed(Operation operation, int startTime) {}
 
-        for (int bath = offset + 1; bath < offset + jsspProblem.capacityOf(machineId); bath++) {
-            if (bathAvailableTime[bath] < bathAvailableTime[best]) { best = bath; }
-        }
-        return best;
-    }
-
-    private int earliestBathTime(JsspProblem jsspProblem, int[] bathAvailableTime, int machineId) {
-        return bathAvailableTime[earliestFreeBath(jsspProblem, bathAvailableTime, machineId)];
+    private State createInitialState(JsspProblem jsspProblem) {
+        int[] nextOperation = new int[jsspProblem.getJobs().size()];
+        int[] bathAvailableTime = new int[jsspProblem.totalBaths()];
+        int[] jobAvailableTime = new int[jsspProblem.getJobs().size()];
+        int[] jobBath = new int[jsspProblem.getJobs().size()];
+        Arrays.fill(jobBath, State.NO_BATH);
+        return new State(nextOperation, bathAvailableTime, jobAvailableTime, jobBath);
     }
 
     private Candidate pick(List<Candidate> candidates) {
-        List<Candidate> atRisk = candidates.stream().filter(Candidate::atRisk).toList();
-        if (atRisk.isEmpty()) { return candidates.get(random.nextInt(candidates.size())); }
+        List<Candidate> sorted = new ArrayList<>(candidates);
+        sorted.sort(Comparator.comparingInt(Candidate::completion));
 
-        List<Candidate> sorted = new ArrayList<>(atRisk);
-        sorted.sort((a, b) -> Integer.compare(a.remainingDwell(), b.remainingDwell()));
-
-        int rclSize = Math.max(1, (int) Math.ceil(sorted.size() * restricted));
-        List<Candidate> restricted = sorted.subList(0, Math.min(rclSize, sorted.size()));
-        return restricted.get(random.nextInt(restricted.size()));
+        int size = Math.max(1, (int) Math.ceil(sorted.size() * restricted));
+        return sorted.get(random.nextInt(Math.min(size, sorted.size())));
     }
-
-    private Integer dwell(Job job, int opIndex, int jobAvailableTime, int earliestStart) {
-        if (opIndex == 0) { return null; }
-
-        Operation predecessor = job.operations().get(opIndex - 1);
-        if (!predecessor.hasDwellLimit()) { return null; }
-
-        int predecessorStart = jobAvailableTime - predecessor.processingTime();
-        int deadline = predecessorStart + predecessor.maxDwellTime();
-        return deadline - earliestStart;
-    }
-
-
 }

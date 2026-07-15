@@ -104,6 +104,26 @@ public class SearchStatistics {
         return searchStatistics;
     }
 
+    public void markStoppedByLimit() {
+        this.stoppedByLimit = true;
+    }
+
+    public boolean isStoppedByLimit() {
+        return stoppedByLimit;
+    }
+
+    public void closeLog() {
+        if (sampleWriter == null) {
+            return;
+        }
+        try {
+            sampleWriter.close();
+        } catch (IOException exception) {
+            System.err.println("Could not close sample log: " + exception.getMessage());
+        }
+        sampleWriter = null;
+    }
+
     public boolean limitReached(long expansions) {
         if (maxExpansions <= 0) {
             return false;

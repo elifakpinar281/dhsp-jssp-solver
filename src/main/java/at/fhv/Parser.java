@@ -67,6 +67,7 @@ public class Parser {
         int machineCount = nextInt(scanner, "machineCount");
 
         int[] capacities = parseCapacities(scanner, machineCount);
+        boolean blocking = parseBlocking(scanner);
         List<Machine> machines = buildMachines(machineCount, capacities);
         List<Job> jobs = new ArrayList<>();
 
@@ -84,7 +85,21 @@ public class Parser {
             }
             jobs.add(new Job(jobId, operations));
         }
-        return new JsspProblem(machines, jobs);
+        return new JsspProblem(machines, jobs, blocking);
+    }
+
+    private boolean parseBlocking(Scanner scanner) {
+        if (!scanner.hasNext("(?i)BLOCKING")) {
+            return false;
+        }
+        scanner.next();
+        if (!scanner.hasNext()) {
+            throw new InvalidInstanceException("Expected true or false after BLOCKING");
+        }
+        String token = scanner.next();
+        if (token.equalsIgnoreCase("true")) { return true; }
+        if (token.equalsIgnoreCase("false")) { return false; }
+        throw new InvalidInstanceException("Expected true or false after BLOCKING but got '" + token + "'");
     }
 
     private int[] parseCapacities(Scanner scanner, int machineCount) {

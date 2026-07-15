@@ -23,6 +23,7 @@ test {
 
 application {
     mainClass = 'at.fhv.Main'
+    applicationDefaultJvmArgs = ['-Xmx4g']
 }
 
 run {

@@ -36,6 +36,8 @@ public class BeamSearch implements ISearchAlgorithm {
         long expanded = 0;
         int maxDepth = 0;
 
+        Node bestGoal = null;
+
         while (!beam.isEmpty()) {
             List<Node> candidates = new ArrayList<>();
 
@@ -44,8 +46,10 @@ public class BeamSearch implements ISearchAlgorithm {
                 if (depth > maxDepth) {maxDepth = depth;}
 
                 if (jsspProblem.isGoal(node.state())) {
-                    statistics.record(expanded, visited.size(), beam.size(), maxDepth);
-                    return new Schedule(buildSchedule(node));
+                    if (bestGoal == null || node.heuristicValue() < bestGoal.heuristicValue()) {
+                        bestGoal = node;
+                    }
+                    continue;
                 }
                 expanded++;
 
@@ -57,6 +61,12 @@ public class BeamSearch implements ISearchAlgorithm {
                     }
                 }
             }
+
+            if (bestGoal != null) {
+                statistics.record(expanded, visited.size(), beam.size(), maxDepth);
+                return new Schedule(buildSchedule(bestGoal));
+            }
+
             candidates.sort(Comparator.comparingDouble(Node::heuristicValue));
             beam.clear();
 
@@ -76,7 +86,9 @@ public class BeamSearch implements ISearchAlgorithm {
         int[] nextOperation = new int[jsspProblem.getJobs().size()];
         int[] bathAvailableTime = new int[jsspProblem.totalBaths()];
         int[] jobAvailableTime = new int[jsspProblem.getJobs().size()];
-        return new State(nextOperation, bathAvailableTime, jobAvailableTime);
+        int[] jobBath = new int[jsspProblem.getJobs().size()];
+        Arrays.fill(jobBath, State.NO_BATH);
+        return new State(nextOperation, bathAvailableTime, jobAvailableTime, jobBath);
     }
 
     private List<Node> expand(Node node, JsspProblem jsspProblem) {
@@ -85,7 +97,7 @@ public class BeamSearch implements ISearchAlgorithm {
             Transition transition = jsspProblem.applyOperation(node.state(), operation);
             if (transition == null ) {continue;}
             double heuristicValue = heuristic.evaluate(transition.state());
-            children.add(new Node(transition.state(), node, heuristicValue, transition.scheduledOperation()));
+            children.add(new Node(transition.state(), node, heuristicValue, transition.scheduledOperations()));
         }
         return children;
     }
@@ -101,8 +113,11 @@ public class BeamSearch implements ISearchAlgorithm {
     private List<ScheduledOperation> buildSchedule(Node goal) {
         List<ScheduledOperation> schedule = new ArrayList<>();
         Node current = goal;
-        while (current != null && current.appliedOperation() != null) {
-            schedule.add(current.appliedOperation());
+        while (current != null && current.appliedOperations() != null) {
+            List<ScheduledOperation> applied = current.appliedOperations();
+            for (int i = applied.size() - 1; i >= 0; i--) {
+                schedule.add(applied.get(i));
+            }
             current = current.parent();
         }
         Collections.reverse(schedule);

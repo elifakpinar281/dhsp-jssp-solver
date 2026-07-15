@@ -50,6 +50,14 @@ def is_number(v):
     return isinstance(v, (int, float)) and not isinstance(v, bool)
 
 
+def bath_count(bad):
+    m = re.match(r"^\s*(\d+)\s*-\s*(\d+)\s*$", str(bad))
+    if not m:
+        return 1
+    lo, hi = int(m.group(1)), int(m.group(2))
+    return (hi - lo) // 10 + 1
+
+
 def parse_max(v):
     if is_number(v):
         return int(v)
@@ -84,12 +92,14 @@ def main():
 
     machine_id = {}
     machine_name = {}
+    capacities = []
     for bad, desc, _, _ in task_rows:
         key = bad
         if key not in machine_id:
             idx = len(machine_id)
             machine_id[key] = idx
             machine_name[idx] = f"{bad} {desc}"
+            capacities.append(bath_count(bad))
 
     jobtype_ops = {t: [] for t in range(5)}
     for bad, desc, mins, maxs in task_rows:
@@ -115,6 +125,8 @@ def main():
     lines = []
     lines.append(f"JOBS {len(jobs)}")
     lines.append(f"MACHINES {machine_count}")
+    lines.append("CAPACITIES " + " ".join(str(c) for c in capacities))
+    lines.append("BLOCKING true")
     for _, ops in jobs:
         parts = [str(len(ops))]
         for m, d, mx in ops:
@@ -139,6 +151,8 @@ def main():
         "jobTypeOfJob": [t for t, _ in jobs],
         "machineNames": machine_name,
         "machineCount": machine_count,
+        "machineCapacities": {machine_name[i]: capacities[i] for i in range(machine_count)},
+        "bathCount": sum(capacities),
         "opsPerJob": [len(ops) for _, ops in jobs],
     }
     with open("demoanlage_mapping.json", "w") as f:
@@ -146,6 +160,7 @@ def main():
 
     print(f"Task-Zeilen (angefahrene Baeder):     {len(task_rows)}")
     print(f"Distinkte Maschinen (Bad-Zeilen):     {machine_count}")
+    print(f"Baeder gesamt (Summe Kapazitaeten):    {sum(capacities)}")
     print(f"Carrier gesamt:                       {len(jobs)}  -> {counts} (Typ1..5)")
     total_ops = sum(len(ops) for _, ops in jobs)
     print(f"Operationen gesamt:                   {total_ops}")

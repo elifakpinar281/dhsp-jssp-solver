@@ -2,8 +2,9 @@ package at.fhv.model.jssp;
 
 import at.fhv.solver.State;
 
-// result of applying 1 operation
+import java.util.List;
+
 public record Transition(
         State state,
-        ScheduledOperation scheduledOperation
+        List<ScheduledOperation> scheduledOperations
 ) {}

@@ -38,12 +38,17 @@ public class ScheduleValidator {
 
             if (jobOperations.size() != required.size()) { continue; }
 
-            for (int i = 0; i < required.size() - 1; i++) {
+            for (int i = 0; i < required.size(); i++) {
                 Operation operation = required.get(i);
-                if (!operation.hasDwellLimit()) { continue; }
 
-                int dwell = jobOperations.get(i + 1).startTime() - jobOperations.get(i).startTime();
-                if (dwell > operation.maxDwellTime()) {
+                int dwell = (i + 1 < required.size())
+                        ? jobOperations.get(i + 1).startTime() - jobOperations.get(i).startTime()
+                        : jobOperations.get(i).endTime() - jobOperations.get(i).startTime();
+
+                if (dwell < operation.processingTime()) {
+                    violations.add("Job " + jobId + " step " + i + " (machine " + operation.machineId() + ") dwell " + dwell + " is below min dwell time " + operation.processingTime());
+                }
+                if (operation.hasDwellLimit() && dwell > operation.maxDwellTime()) {
                     violations.add("Job " + jobId + " step " + i + " (machine " + operation.machineId() + ") dwell " + dwell + " exceeds max dwell time " + operation.maxDwellTime());
                 }
             }
@@ -114,29 +119,44 @@ public class ScheduleValidator {
     }
 
     private void checkMachineOverlap(JsspProblem jsspProblem, List<ScheduledOperation> scheduledOperations, List<String> violations) {
-        Map<Integer, List<ScheduledOperation>> planned = new HashMap<>();
-        for (ScheduledOperation scheduledOperation : scheduledOperations) {
-            planned.computeIfAbsent(scheduledOperation.machineId(), key -> new ArrayList<>()).add(scheduledOperation);
+        Map<Integer, List<Occupancy>> planned = new HashMap<>();
+
+        for (Job job : jsspProblem.getJobs()) {
+            List<ScheduledOperation> jobOperations = new ArrayList<>();
+            for (ScheduledOperation scheduledOperation : scheduledOperations) {
+                if (scheduledOperation.jobId() == job.jobId()) { jobOperations.add(scheduledOperation); }
+            }
+            jobOperations.sort(Comparator.comparingInt(ScheduledOperation::startTime));
+
+            for (int i = 0; i < jobOperations.size(); i++) {
+                ScheduledOperation current = jobOperations.get(i);
+                int leaveTime = (jsspProblem.isBlocking() && i + 1 < jobOperations.size())
+                        ? jobOperations.get(i + 1).startTime()
+                        : current.endTime();
+                planned.computeIfAbsent(current.machineId(), key -> new ArrayList<>()).add(new Occupancy(current.startTime(), leaveTime));
+            }
         }
 
-        for (Map.Entry<Integer, List<ScheduledOperation>> entry : planned.entrySet()) {
+        for (Map.Entry<Integer, List<Occupancy>> entry : planned.entrySet()) {
             int machineId = entry.getKey();
             int capacity = jsspProblem.capacityOf(machineId);
-            List<ScheduledOperation> machineOperations = entry.getValue();
+            List<Occupancy> occupancies = entry.getValue();
 
-            for (ScheduledOperation reference : machineOperations) {
-                int time = reference.startTime();
+            for (Occupancy reference : occupancies) {
+                int time = reference.enter();
                 int concurrent = 0;
 
-                for (ScheduledOperation other : machineOperations) {
-                    if (other.startTime() <= time && time < other.endTime()) { concurrent++; }
+                for (Occupancy other : occupancies) {
+                    if (other.enter() <= time && time < other.leave()) { concurrent++; }
                 }
 
                 if (concurrent > capacity) {
-                    violations.add("Machine " + machineId + " has " + concurrent + " concurrent operations at time " + time + " but capacity is " + capacity);
+                    violations.add("Machine " + machineId + " holds " + concurrent + " carriers at time " + time + " but capacity is " + capacity);
                     break;
                 }
             }
         }
     }
+
+    private record Occupancy(int enter, int leave) {}
 }

@@ -15,6 +15,7 @@ import at.fhv.solver.impl.TabuSearch;
 import at.fhv.solver.impl.decoder.DwellStartDecoder;
 import at.fhv.solver.impl.tabu.INeighbourhood;
 import at.fhv.solver.impl.tabu.ScheduleEvaluator;
+import at.fhv.solver.impl.tabu.impl.AdjacentSwapNeighbourhood;
 import at.fhv.solver.impl.tabu.impl.DwellRepairNeighbourhood;
 import at.fhv.solver.impl.tabu.impl.N5Neighbourhood;
 import at.fhv.solver.validation.MemorySampler;
@@ -25,6 +26,7 @@ import at.fhv.visualization.SearchStatistics;
 
 import java.io.IOException;
 import java.io.PrintStream;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -41,7 +43,8 @@ import java.util.Random;
 //.\gradlew.bat run --args="run --algo GREEDY,BEAM,TABU --instance benchmarks/ft06.txt,benchmarks/demoanlage.txt"
 
 public class Main {
-    private static final long GREEDY_MAX_EXPANSIONS = 100_000_000;
+    private static final long GREEDY_MAX_EXPANSIONS = 1_000_000;
+    private static final int GREEDY_MAX_NODES = 1_500_000;
     private static final DateTimeFormatter STAMP = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss");
 
     public static void main(String[] args) throws IOException {
@@ -78,9 +81,10 @@ public class Main {
         List<String> algorithms = options(args, "--algo", "GREEDY,BEAM,TABU");
         List<String> beamWidths = options(args, "--beam", "20");
         List<String> tenures = options(args, "--tenure", "10");
-        List<String> noImprovements = options(args, "--noimp", "2000");
+        List<String> noImprovements = options(args, "--noimp", "300");
         List<String> seeds = options(args, "--seed", "42");
-        RunLogWriter writer = new RunLogWriter(Path.of(option(args, "--out", "runs")));
+        Path outFolder = Path.of(option(args, "--out", "runs"));
+        RunLogWriter writer = new RunLogWriter(outFolder);
 
         Parser parser = new Parser();
         int written = 0;
@@ -92,13 +96,18 @@ public class Main {
 
             for (String algorithm : algorithms) {
                 for (Map<String, Object> params : parameterSets(algorithm, beamWidths, tenures, noImprovements, seeds)) {
-                    RunLog log = solveOnce(instance, problem, algorithm.toUpperCase(), params);
+                    boolean[] stoppedByLimit = new boolean[1];
+                    RunLog log = solveOnce(instance, problem, algorithm.toUpperCase(), params, outFolder, stoppedByLimit);
                     writer.write(log);
                     written++;
                     System.out.println("  " + log.runId() + "  makespan=" + (log.makespan() == null ? "-" : log.makespan()) + " valid=" + log.valid() + " time=" + log.timeMs() + "ms");
 
                     if (log.makespan() == null) {
-                        failures.add(log.runId() + ": no schedule found (search gave up / dead-ended before reaching a goal)");
+                        failures.add(log.runId() + ": no schedule found ("
+                                + (stoppedByLimit[0]
+                                ? "gave up at the configured limit after " + log.expanded() + " expansions / " + log.reached() + " reached states"
+                                : "dead-ended before reaching a goal")
+                                + ")");
                     } else if (!log.valid()) {
                         failures.add(log.runId() + ": schedule is INVALID -> " + log.violations());
                     }
@@ -150,13 +159,17 @@ public class Main {
         throw new IllegalArgumentException("Unknown algorithm: " + algorithm);
     }
 
-    private static RunLog solveOnce(String instance, JsspProblem problem, String algorithm, Map<String, Object> params) {
+    private static RunLog solveOnce(String instance, JsspProblem problem, String algorithm, Map<String, Object> params, Path outFolder, boolean[] stoppedByLimit) throws IOException {
         IHeuristic heuristic = new MakespanEstimateHeuristic(problem);
         ScheduleValidator validator = new ScheduleValidator();
 
         SearchStatistics statistics = algorithm.equals("GREEDY")
                 ? new SearchStatistics(1000, GREEDY_MAX_EXPANSIONS)
                 : new SearchStatistics();
+
+        String runId = runId(instance, algorithm, params);
+        Files.createDirectories(outFolder);
+        statistics.enableLog(outFolder.resolve(runId + "-samples.csv").toString());
 
         TabuSearch[] tabuRef = new TabuSearch[1];
         ISearchAlgorithm solver = buildSolver(algorithm, problem, heuristic, statistics, params, tabuRef);
@@ -174,6 +187,8 @@ public class Main {
         }
         long elapsed = System.currentTimeMillis() - start;
         memorySampler._stop();
+        statistics.closeLog();
+        stoppedByLimit[0] = statistics.isStoppedByLimit();
 
         Integer makespan = null;
         boolean valid = false;
@@ -185,7 +200,7 @@ public class Main {
             violations = result.violations();
         }
 
-        return new RunLog(runId(instance, algorithm, params), LocalDateTime.now().toString(), instance, instanceKey(instance),
+        return new RunLog(runId, LocalDateTime.now().toString(), instance, instanceKey(instance),
                 algorithm, params, problem.getJobs().size(), problem.getMachines().size(), makespan,
                 valid, elapsed, memorySampler.getPeak(), statistics.getLastExpansions(),
                 statistics.getLastReached(), statistics.getLastMaxDepth(), tabuRef[0] == null ? null : tabuRef[0].getHistory(),
@@ -196,13 +211,15 @@ public class Main {
     private static ISearchAlgorithm buildSolver(String algorithm, JsspProblem problem, IHeuristic heuristic, SearchStatistics statistics, Map<String, Object> params, TabuSearch[] tabuRef) {
         switch (algorithm) {
             case "GREEDY":
-                return new GreedySearch(heuristic, statistics);
+                return new GreedySearch(heuristic, statistics, GREEDY_MAX_NODES);
             case "BEAM":
                 return new BeamSearch(heuristic, (Integer) params.get("beam"), statistics);
             case "TABU":
                 long seed = (Long) params.get("seed");
                 ScheduleEvaluator evaluator = new ScheduleEvaluator(problem);
-                INeighbourhood neighbourhood = new DwellRepairNeighbourhood(new N5Neighbourhood(), problem);
+                INeighbourhood neighbourhood = problem.isBlocking()
+                        ? new AdjacentSwapNeighbourhood()
+                        : new DwellRepairNeighbourhood(new N5Neighbourhood(), problem);
                 IStartDecoder decoder = new DwellStartDecoder(new Random(seed));
 
                 TabuSearch tabuSearch = new TabuSearch(

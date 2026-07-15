@@ -10,16 +10,24 @@ import at.fhv.visualization.SearchStatistics;
 import java.util.*;
 
 public class GreedySearch implements ISearchAlgorithm {
+    private static final int DEFAULT_MAX_NODES = 1_500_000;
+
     private final IHeuristic heuristic;
     private final SearchStatistics statistics;
+    private final int maxNodes;
 
     public GreedySearch(IHeuristic heuristic) {
-        this(heuristic, new SearchStatistics());
+        this(heuristic, new SearchStatistics(), DEFAULT_MAX_NODES);
     }
 
     public GreedySearch(IHeuristic heuristic, SearchStatistics statistics) {
+        this(heuristic, statistics, DEFAULT_MAX_NODES);
+    }
+
+    public GreedySearch(IHeuristic heuristic, SearchStatistics statistics, int maxNodes) {
         this.heuristic = heuristic;
         this.statistics = statistics;
+        this.maxNodes = maxNodes;
     }
 
     @Override
@@ -28,8 +36,13 @@ public class GreedySearch implements ISearchAlgorithm {
         double heuristicValue = heuristic.evaluate(initialState);
         Node initialNode = new Node(initialState, null, heuristicValue, null);
 
-        PriorityQueue<Node> frontier = new PriorityQueue<>((n1, n2)
-                -> Double.compare(n1.heuristicValue(), n2.heuristicValue()));
+        PriorityQueue<Node> frontier = new PriorityQueue<>((n1, n2) -> {
+            int byDepth = Integer.compare(scheduledCount(n2.state()), scheduledCount(n1.state()));
+            if (byDepth != 0) {
+                return byDepth;
+            }
+            return Double.compare(n1.heuristicValue(), n2.heuristicValue());
+        });
 
         Set<State> reached = new HashSet<>();
         reached.add(initialState);
@@ -65,6 +78,10 @@ public class GreedySearch implements ISearchAlgorithm {
             if (statistics.limitReached(expanded)) {
                 return null;
             }
+            if (reached.size() >= maxNodes) {
+                statistics.markStoppedByLimit();
+                return null;
+            }
         }
         return null;
     }
@@ -73,7 +90,9 @@ public class GreedySearch implements ISearchAlgorithm {
         int[] nextOperation = new int[problem.getJobs().size()];
         int[] bathAvailableTime = new int[problem.totalBaths()];
         int[] jobAvailableTime = new int[problem.getJobs().size()];
-        return new State(nextOperation, bathAvailableTime, jobAvailableTime);
+        int[] jobBath = new int[problem.getJobs().size()];
+        Arrays.fill(jobBath, State.NO_BATH);
+        return new State(nextOperation, bathAvailableTime, jobAvailableTime, jobBath);
     }
 
     private List<Node> expand(Node node, JsspProblem problem) {
@@ -82,7 +101,7 @@ public class GreedySearch implements ISearchAlgorithm {
             Transition transition = problem.applyOperation(node.state(), operation);
             if (transition == null) {continue;}
             double heuristicValue = heuristic.evaluate(transition.state());
-            children.add(new Node(transition.state(), node, heuristicValue, transition.scheduledOperation()));
+            children.add(new Node(transition.state(), node, heuristicValue, transition.scheduledOperations()));
         }
         return children;
     }
@@ -98,8 +117,11 @@ public class GreedySearch implements ISearchAlgorithm {
     private List<ScheduledOperation> buildSchedule(Node goal) {
         List<ScheduledOperation> schedule = new ArrayList<>();
         Node current = goal;
-        while (current != null && current.appliedOperation() != null) {
-            schedule.add(current.appliedOperation());
+        while (current != null && current.appliedOperations() != null) {
+            List<ScheduledOperation> applied = current.appliedOperations();
+            for (int i = applied.size() - 1; i >= 0; i--) {
+                schedule.add(applied.get(i));
+            }
             current = current.parent();
         }
         Collections.reverse(schedule);
