@@ -78,7 +78,7 @@ public class Main {
         List<String> algorithms = options(args, "--algo", "GREEDY,BEAM,TABU");
         List<String> beamWidths = options(args, "--beam", "20");
         List<String> tenures = options(args, "--tenure", "10");
-        List<String> noImprovements = options(args, "--noimp", "400");
+        List<String> noImprovements = options(args, "--noimp", "2000");
         List<String> seeds = options(args, "--seed", "42");
         RunLogWriter writer = new RunLogWriter(Path.of(option(args, "--out", "runs")));
 

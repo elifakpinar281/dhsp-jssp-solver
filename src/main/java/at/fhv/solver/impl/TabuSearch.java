@@ -56,7 +56,7 @@ public class TabuSearch implements ISearchAlgorithm {
         MachineSequences current = startDecoder.decode(problem);
         ScheduleEvaluator.EvaluationResult currentResult = scheduleEvaluator.evaluate(current);
         MachineSequences best = current.copy();
-        int bestScore = calculateScore(currentResult);
+        long bestScore = calculateScore(currentResult);
         int bestMakespan = currentResult.makespan();
 
         TabuList tabu = new TabuList();
@@ -73,12 +73,12 @@ public class TabuSearch implements ISearchAlgorithm {
 
             Move bestMove = null;
             ScheduleEvaluator.EvaluationResult bestMoveResult = null;
-            int bestMoveScore = Integer.MAX_VALUE;
+            long bestMoveScore = Long.MAX_VALUE;
 
             for (Move move : neighbours) {
                 MachineSequences candidate = current.swapped(move);
                 ScheduleEvaluator.EvaluationResult result = scheduleEvaluator.evaluate(candidate);
-                int score = calculateScore(result);
+                long score = calculateScore(result);
                 boolean tabuMove = tabu.isTabu(move.getAttribute(), iteration);
                 boolean aspiration = score < bestScore;
 
@@ -119,13 +119,8 @@ public class TabuSearch implements ISearchAlgorithm {
         return scheduleEvaluator.toSchedule(result);
     }
 
-    private int calculateScore(ScheduleEvaluator.EvaluationResult result) {
-        long penalty = 0;
-        for (ScheduleEvaluator.DwellViolation violation : result.dwellViolations()) {
-            penalty += violation.excess() * 100000L;
-        }
-
-        long score = penalty * 100000L + result.makespan();
-        return score > Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) score;
+    private long calculateScore(ScheduleEvaluator.EvaluationResult result) {
+        long penalty = result.violationPenalty();
+        return penalty * 100000L + result.makespan();
     }
 }

@@ -36,15 +36,14 @@ public class ScheduleValidator {
             jobOperations.sort(Comparator.comparingInt(ScheduledOperation::startTime));
             List<Operation> required = job.operations();
 
-            if (jobOperations.size() != required.size()) { continue; } // Anzahl wird an anderer Stelle gemeldet
+            if (jobOperations.size() != required.size()) { continue; }
 
             for (int i = 0; i < required.size() - 1; i++) {
                 Operation operation = required.get(i);
                 if (!operation.hasDwellLimit()) { continue; }
-                int dwell = jobOperations.get(i + 1).startTime() - jobOperations.get(i).startTime();
+                int dwell = jobOperations.get(i + 1).startTime() - jobOperations.get(i).endTime();
                 if (dwell > operation.maxDwellTime()) {
-                    violations.add("Job " + jobId + " step " + i + " (machine " + operation.machineId()
-                            + ") dwell " + dwell + " exceeds max dwell time " + operation.maxDwellTime());
+                    violations.add("Job " + jobId + " step " + i + " (machine " + operation.machineId() + ") dwell " + dwell + " exceeds max dwell time " + operation.maxDwellTime());
                 }
             }
         }
