@@ -1,0 +1,20 @@
+{
+ "runId": "20260715-131230_demoanlage_BEAM_beam1",
+ "timestamp": "2026-07-15T13:12:30.461919",
+ "instance": "benchmarks/demoanlage.txt",
+ "instanceKey": "demoanlage",
+ "algorithm": "BEAM",
+ "params": {"beam": 1},
+"jobCount": 10,
+"machineCount": 35,
+"makespan": null,
+"valid": false,
+"timeMs": 21,
+"peakHeap": 3,
+"expanded": 233,
+"reached": 1602,
+"maxDepth": 232,
+ "violations": [],
+ "iterations": null,
+ "schedule": null
+}

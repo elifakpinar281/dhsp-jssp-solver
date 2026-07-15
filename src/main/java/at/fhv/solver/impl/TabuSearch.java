@@ -50,7 +50,7 @@ public class TabuSearch implements ISearchAlgorithm {
         MachineSequences current = startDecoder.decode(jsspProblem);
         MachineSequences best = current;
         ScheduleEvaluator.EvaluationResult currentResult = scheduleEvaluator.evaluate(current);
-        int makespanBest = currentResult.dwellFeasible() ? currentResult.makespan() : Integer.MAX_VALUE;
+        double bestScore = calculateScore(currentResult);
 
         TabuList tabu = new TabuList();
 
@@ -61,63 +61,56 @@ public class TabuSearch implements ISearchAlgorithm {
         while (sinceImprovement < maxIterationsWithoutImprovement) {
             iteration++;
             currentResult = scheduleEvaluator.evaluate(current);
-            List<Move> neighbours = neighbourhood.generate(currentResult);
+            List<Move> neighbours = neighbourhood.generate(currentResult, current);
             if (neighbours.isEmpty()) {
                 break;
             }
             Move bestMove = null;
-            int bestMoveMakespan = Integer.MAX_VALUE;
-            List<Move> feasibleNeighbours = new ArrayList<>();
+            double bestMoveScore = Double.MAX_VALUE;
 
             for (Move move : neighbours) {
-                ScheduleEvaluator.EvaluationResult resultMove =
-                        scheduleEvaluator.evaluateMove(current, move, currentResult.head(), currentResult.tail());
-
-                if (!resultMove.dwellFeasible()) {
-                    continue;
-                }
-                feasibleNeighbours.add(move);
-
-                int makespanMove = resultMove.makespan();
+                ScheduleEvaluator.EvaluationResult resultMove = scheduleEvaluator.evaluateMove(current, move, currentResult.head(), currentResult.tail());
+                double moveScore = calculateScore(resultMove);
                 boolean isTabu = tabu.isTabu(move.getAttribute(), iteration);
-                boolean aspiration = makespanMove < makespanBest;
-                if ((!isTabu || aspiration) && makespanMove < bestMoveMakespan) {
+                boolean aspiration = moveScore < bestScore;
+
+                if ((!isTabu || aspiration) && moveScore < bestMoveScore) {
                     bestMove = move;
-                    bestMoveMakespan = makespanMove;
+                    bestMoveScore = moveScore;
                 }
-            }
-
-            if (currentResult.criticalPath().isEmpty()) {
-                break;
-            }
-
-            if (feasibleNeighbours.isEmpty()) {
-                break;
             }
 
             if (bestMove == null) {
-                bestMove = feasibleNeighbours.get(random.nextInt(feasibleNeighbours.size()));
-                bestMoveMakespan = scheduleEvaluator.evaluateMove(current, bestMove, currentResult.head(), currentResult.tail()).makespan();
+                bestMove = neighbours.get(random.nextInt(neighbours.size()));
+                bestMoveScore = calculateScore(scheduleEvaluator.evaluateMove(current, bestMove, currentResult.head(), currentResult.tail()));
             }
 
             current = current.swapped(bestMove);
             tabu.setTabu(bestMove.getAttribute(), iteration + tenure);
 
-            if (bestMoveMakespan < makespanBest) {
+            if (bestMoveScore < bestScore) {
                 best = current;
-                makespanBest = bestMoveMakespan;
+                bestScore = bestMoveScore;
                 sinceImprovement = 0;
             } else {
                 sinceImprovement++;
             }
 
-            history.add(new IterationSnapshot(iteration, bestMoveMakespan, makespanBest));
+            ScheduleEvaluator.EvaluationResult currentEvaluation = scheduleEvaluator.evaluate(current);
+            history.add(new IterationSnapshot(iteration, currentEvaluation.makespan(), scheduleEvaluator.evaluate(best).makespan()));
 
             if (verbose) {
-                System.out.println("Iteration: " + iteration + ", makespan: " + bestMoveMakespan);
+                System.out.println("Iteration: " + iteration + ", score: " + bestMoveScore + ", makespan: " + currentEvaluation.makespan() + ", dwell violations: " + currentEvaluation.dwellViolations()
+                );
             }
+
         }
         ScheduleEvaluator.EvaluationResult resultBest = scheduleEvaluator.evaluate(best);
         return scheduleEvaluator.toSchedule(resultBest);
+    }
+
+    private double calculateScore(ScheduleEvaluator.EvaluationResult result) {
+        int violations = result.dwellViolations();
+        return violations * 100000 + result.makespan();
     }
 }

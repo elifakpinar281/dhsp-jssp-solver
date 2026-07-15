@@ -16,7 +16,8 @@ public class ScheduleEvaluator {
             List<Operation> criticalPath,
             Map<Operation, Integer> head,
             Map<Operation, Integer> tail,
-            boolean dwellFeasible
+            boolean dwellFeasible,
+            int dwellViolations
     ) {}
 
     public EvaluationResult evaluate(MachineSequences sequences) {
@@ -73,25 +74,28 @@ public class ScheduleEvaluator {
             }
         }
 
-        return new EvaluationResult(makespan, criticalPath, head, tail, isDwellFeasible(head));
+        int dwellViolations = countDwellViolations(head);
+        return new EvaluationResult(makespan, criticalPath, head, tail, dwellViolations == 0, dwellViolations);
     }
 
-    private boolean isDwellFeasible(Map<Operation, Integer> head) {
+    private int countDwellViolations(Map<Operation, Integer> head) {
+        int violations = 0;
+
         for (Job job : jsspProblem.getJobs()) {
             List<Operation> operations = job.operations();
             for (int i = 0; i < operations.size() - 1; i++) {
                 Operation operation = operations.get(i);
-                if (!operation.hasDwellLimit()) {
-                    continue;
-                }
+
+                if (!operation.hasDwellLimit()) { continue;}
                 Operation successor = operations.get(i + 1);
-                int dwell = head.get(successor) - head.get(operation);
-                if (dwell > operation.maxDwellTime()) {
-                    return false;
-                }
+
+                int operationEnd = head.get(operation) + operation.processingTime();
+                int dwell = head.get(successor) - operationEnd;
+
+                if (dwell > operation.maxDwellTime()) { violations++;}
             }
         }
-        return true;
+        return violations;
     }
 
     private List<Operation> topologicalOrder(MachineSequences sequences) {
@@ -114,7 +118,6 @@ public class ScheduleEvaluator {
             if (sequences.machinePredecessor(operation) != null) {
                 degree++;
             }
-
             inDegree.put(operation, degree);
         }
 
@@ -138,15 +141,10 @@ public class ScheduleEvaluator {
 
             for (Operation next : successors) {
                 inDegree.put(next, inDegree.get(next) - 1);
-                if (inDegree.get(next) == 0) {
-                    queue.add(next);
-                }
+                if (inDegree.get(next) == 0) { queue.add(next); }
             }
         }
-        if (result.size() != operations.size()) {
-            throw new IllegalStateException("Cycle detected");
-        }
-
+        if (result.size() != operations.size()) { throw new IllegalStateException("Cycle detected"); }
         return result;
     }
 
@@ -167,16 +165,7 @@ public class ScheduleEvaluator {
             for (Operation op : job.operations()) {
                 int start = result.head().get(op);
                 int end = start + op.processingTime();
-
-                scheduledOperations.add(
-                        new ScheduledOperation(
-                                op.jobId(),
-                                op.machineId(),
-                                start,
-                                end
-                        )
-                );
-
+                scheduledOperations.add( new ScheduledOperation( op.jobId(), op.machineId(), start, end ));
             }
         }
         return new Schedule(scheduledOperations);
@@ -212,7 +201,6 @@ public class ScheduleEvaluator {
             makespan = Math.max(makespan, head.get(op) + op.processingTime());
         }
 
-
         List<Operation> criticalPath = new ArrayList<>();
 
         for (Operation op : topologicalOrder(newSequences)) {
@@ -221,7 +209,8 @@ public class ScheduleEvaluator {
             }
         }
 
-        return new EvaluationResult(makespan, criticalPath, head, tail, isDwellFeasible(head));
+        int dwellViolations = countDwellViolations(head);
+        return new EvaluationResult(makespan, criticalPath, head, tail, dwellViolations == 0, dwellViolations);
     }
 
     private Set<Operation> forwardReachable(Set<Operation> start, MachineSequences sequences) {
@@ -230,21 +219,11 @@ public class ScheduleEvaluator {
 
         while (!queue.isEmpty()) {
             Operation current = queue.poll();
-            if (!visited.add(current)) {
-                continue;
-            }
-
+            if (!visited.add(current)) { continue;}
             Operation jobNext = jsspProblem.jobSuccessor(current);
-
-            if (jobNext != null) {
-                queue.add(jobNext);
-            }
-
+            if (jobNext != null) { queue.add(jobNext); }
             Operation machineNext = sequences.machineSuccessor(current);
-
-            if (machineNext != null) {
-                queue.add(machineNext);
-            }
+            if (machineNext != null) { queue.add(machineNext);}
         }
         return visited;
     }
@@ -255,22 +234,13 @@ public class ScheduleEvaluator {
 
         while (!queue.isEmpty()) {
             Operation current = queue.poll();
-
-            if (!visited.add(current)) {
-                continue;
-            }
-
+            if (!visited.add(current)) { continue;}
             Operation jobPrev = jsspProblem.jobPredecessor(current);
 
-            if (jobPrev != null) {
-                queue.add(jobPrev);
-            }
+            if (jobPrev != null) { queue.add(jobPrev); }
 
             Operation machinePrev = sequences.machinePredecessor(current);
-
-            if (machinePrev != null) {
-                queue.add(machinePrev);
-            }
+            if (machinePrev != null) { queue.add(machinePrev);}
         }
         return visited;
     }
@@ -283,22 +253,15 @@ public class ScheduleEvaluator {
             int count = 0;
             Operation jobPrev = jsspProblem.jobPredecessor(op);
 
-            if(jobPrev != null && operations.contains(jobPrev)){
-                count++;
-            }
-
+            if(jobPrev != null && operations.contains(jobPrev)){ count++; }
             Operation machinePrev = sequences.machinePredecessor(op);
 
-            if(machinePrev != null && operations.contains(machinePrev)){
-                count++;
-            }
+            if(machinePrev != null && operations.contains(machinePrev)){ count++; }
             degree.put(op,count);
         }
 
         for(Operation op : operations){
-            if(degree.get(op)==0){
-                queue.add(op);
-            }
+            if(degree.get(op)==0){ queue.add(op); }
         }
 
         List<Operation> result = new ArrayList<>();
@@ -322,9 +285,7 @@ public class ScheduleEvaluator {
             }
         }
 
-        if (result.size() != operations.size()) {
-            throw new IllegalStateException("Cycle detected");
-        }
+        if (result.size() != operations.size()) { throw new IllegalStateException("Cycle detected"); }
         return result;
     }
 }

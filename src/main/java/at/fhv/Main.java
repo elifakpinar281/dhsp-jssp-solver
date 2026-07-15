@@ -11,9 +11,10 @@ import at.fhv.solver.IStartDecoder;
 import at.fhv.solver.impl.BeamSearch;
 import at.fhv.solver.impl.GreedySearch;
 import at.fhv.solver.impl.TabuSearch;
-import at.fhv.solver.impl.decoder.RandomStartDecoder;
+import at.fhv.solver.impl.decoder.DwellStartDecoder;
 import at.fhv.solver.impl.tabu.INeighbourhood;
 import at.fhv.solver.impl.tabu.ScheduleEvaluator;
+import at.fhv.solver.impl.tabu.impl.DwellRepairNeighbourhood;
 import at.fhv.solver.impl.tabu.impl.N5Neighbourhood;
 import at.fhv.solver.validation.MemorySampler;
 import at.fhv.solver.validation.ScheduleValidator;
@@ -34,9 +35,9 @@ import java.util.Map;
 import java.util.Random;
 
 //.\gradlew.bat run --args="<command> [options]
-//.\gradlew.bat run --args="run --algo TABU --instance benchmarks/ft06.txt --seed 1-20"
-//.\gradlew.bat run --args="run --algo BEAM --instance benchmarks/ft06.txt --beam 1,5,20,50,100"
-//.\gradlew.bat run --args="run --algo GREEDY,BEAM,TABU --instance benchmarks/ft06.txt,benchmarks/la02.txt"
+//.\gradlew.bat run --args="run --algo TABU --instance benchmarks/demoanlage.txt --seed 1-20"
+//.\gradlew.bat run --args="run --algo BEAM --instance benchmarks/demoanlage.txt --beam 1,5,20,50,100"
+//.\gradlew.bat run --args="run --algo GREEDY,BEAM,TABU --instance benchmarks/ft06.txt,benchmarks/demoanlage.txt"
 
 public class Main {
     private static final long GREEDY_MAX_EXPANSIONS = 400_000;
@@ -85,7 +86,7 @@ public class Main {
 
         for (String instance : instances) {
             JsspProblem problem = parser.parse(instance);
-            System.out.println("== " + instance + " (" + problem.getJobs().size() + " jobs, " + problem.getMachines().size() + " machines) ==");
+            System.out.println("-> " + instance + " (" + problem.getJobs().size() + " jobs, " + problem.getMachines().size() + " machines)");
 
             for (String algorithm : algorithms) {
                 for (Map<String, Object> params : parameterSets(algorithm, beamWidths, tenures, noImprovements, seeds)) {
@@ -185,10 +186,9 @@ public class Main {
             case "TABU":
                 long seed = (Long) params.get("seed");
                 ScheduleEvaluator evaluator = new ScheduleEvaluator(problem);
-                INeighbourhood neighbourhood = new N5Neighbourhood();
-                IStartDecoder decoder = new RandomStartDecoder(new Random(seed));
-                TabuSearch tabuSearch = new TabuSearch(evaluator, neighbourhood, (Integer) params.get("tenure"), (Integer) params.get("noImprove"), decoder, seed)
-                        .withVerbose(false);
+                INeighbourhood neighbourhood = new DwellRepairNeighbourhood(new N5Neighbourhood(), problem);
+                IStartDecoder decoder = new DwellStartDecoder(new Random(seed));
+                TabuSearch tabuSearch = new TabuSearch(evaluator, neighbourhood, (Integer) params.get("tenure"), (Integer) params.get("noImprove"), decoder, seed).withVerbose(false);
                 tabuRef[0] = tabuSearch;
                 return tabuSearch;
             default:

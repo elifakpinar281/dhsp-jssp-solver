@@ -2,6 +2,7 @@ package at.fhv.solver.impl.tabu.impl;
 
 import at.fhv.model.jssp.Operation;
 import at.fhv.solver.impl.tabu.INeighbourhood;
+import at.fhv.solver.impl.tabu.MachineSequences;
 import at.fhv.solver.impl.tabu.Move;
 import at.fhv.solver.impl.tabu.ScheduleEvaluator;
 
@@ -11,7 +12,7 @@ import java.util.List;
 public class N5Neighbourhood implements INeighbourhood {
 
     @Override
-    public List<Move> generate(ScheduleEvaluator.EvaluationResult evaluationResult) {
+    public List<Move> generate(ScheduleEvaluator.EvaluationResult evaluationResult, MachineSequences machineSequences) {
         List<Move> moves = new ArrayList<>();
         List<List<Operation>> blocks = breakIntoBlocks(evaluationResult.criticalPath());
 
