@@ -180,7 +180,7 @@ public class Main {
         List<String> violations = new ArrayList<>();
         if (schedule != null) {
             ValidationResult result = validator.validateSchedule(problem, schedule);
-            makespan = ScheduleEvaluator.ma.(schedule);
+            makespan = computeMakespan(schedule);
             valid = result.valid();
             violations = result.violations();
         }
@@ -277,5 +277,13 @@ public class Main {
             }
         }
         return true;
+    }
+
+    private static int computeMakespan(Schedule schedule) {
+        int makespan = 0;
+        for (var operation : schedule.operations()) {
+            makespan = Math.max(makespan, operation.endTime());
+        }
+        return makespan;
     }
 }
