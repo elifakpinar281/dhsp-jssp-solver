@@ -1,64 +1,38 @@
 package at.fhv.solver.impl.tabu.impl;
 
-import at.fhv.model.jssp.Job;
-import at.fhv.model.jssp.JsspProblem;
 import at.fhv.model.jssp.Operation;
-import at.fhv.solver.impl.tabu.INeighbourhood;
-import at.fhv.solver.impl.tabu.MachineSequences;
-import at.fhv.solver.impl.tabu.Move;
-import at.fhv.solver.impl.tabu.ScheduleEvaluator;
+import at.fhv.model.jssp.JsspProblem;
+import at.fhv.solver.impl.tabu.*;
 
-import java.util.ArrayList;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 
 public class DwellRepairNeighbourhood implements INeighbourhood {
     private final INeighbourhood delegate;
-    private final JsspProblem jsspProblem;
 
-    public DwellRepairNeighbourhood(INeighbourhood delegate, JsspProblem jsspProblem) {
+    public DwellRepairNeighbourhood(INeighbourhood delegate, JsspProblem problem) {
         this.delegate = delegate;
-        this.jsspProblem = jsspProblem;
     }
+
 
     @Override
     public List<Move> generate(ScheduleEvaluator.EvaluationResult evaluationResult, MachineSequences sequences) {
-        List<Move> moves = new ArrayList<>(delegate.generate(evaluationResult, sequences));
-        moves.addAll(repair(evaluationResult, sequences));
-        return moves;
-    }
-
-    private List<Move> repair(ScheduleEvaluator.EvaluationResult evaluationResult, MachineSequences sequences) {
         Set<Move> moves = new LinkedHashSet<>();
+        moves.addAll(delegate.generate(evaluationResult, sequences));
 
-        for (Job job :jsspProblem.getJobs()) {
-            List<Operation> operations = job.operations();
-            for (int i = 0; i < operations.size() - 1; i++ ) {
-                Operation operation = operations.get(i);
-                if (!operation.hasDwellLimit()) { continue; }
+        for(ScheduleEvaluator.DwellViolation violation : evaluationResult.dwellViolations()) {
+            Operation op = violation.operation();
+            Operation pred = sequences.machinePredecessor(op);
+            Operation succ = sequences.machineSuccessor(op);
 
-                Operation successor = operations.get(i+1);
-                Integer operationHead = evaluationResult.head().get(operation);
-                Integer successorHead = evaluationResult.head().get(successor);
-                if (operationHead == null || successorHead == null) {continue;}
+            if(pred != null) {
+                moves.add(new Move(op, pred, op.machineId()));
+            }
 
-                int operationEnd = operationHead + operation.processingTime();
-                int dwell = successorHead - operationEnd;
-                if (dwell <= operation.maxDwellTime()) {continue;}
 
-                addSwapWithNeighbour(moves, sequences, successor, true);
-                addSwapWithNeighbour(moves, sequences, operation, true);
-                addSwapWithNeighbour(moves, sequences, successor, false);
-                addSwapWithNeighbour(moves, sequences, operation, false);
+            if(succ != null) {
+                moves.add(new Move(op, succ, op.machineId()));
             }
         }
         return new ArrayList<>(moves);
-    }
-
-    private void addSwapWithNeighbour(Set<Move> moves, MachineSequences sequences, Operation operation, boolean withPredecessor) {
-        Operation neighbour = withPredecessor ? sequences.machinePredecessor(operation) : sequences.machineSuccessor(operation);
-        if (neighbour == null) {return;}
-        moves.add(new Move(operation, neighbour, operation.machineId()));
     }
 }

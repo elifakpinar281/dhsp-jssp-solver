@@ -11,28 +11,34 @@ import java.util.List;
 import java.util.Random;
 
 public class TabuSearch implements ISearchAlgorithm {
-    public record IterationSnapshot(int iteration, int makespan, int bestMakespan) {}
+    public record IterationSnapshot(
+            int iteration,
+            int makespan,
+            int bestMakespan
+    ) {}
 
-    private ScheduleEvaluator scheduleEvaluator;
-    private INeighbourhood neighbourhood;
-    private int tenure;
-    private int maxIterationsWithoutImprovement;
-    private IStartDecoder startDecoder;
+    private final ScheduleEvaluator scheduleEvaluator;
+    private final INeighbourhood neighbourhood;
+    private final int tenure;
+    private final int maxIterationsWithoutImprovement;
+    private final IStartDecoder startDecoder;
     private final Random random;
     private boolean verbose = true;
     private final List<IterationSnapshot> history = new ArrayList<>();
+
 
     public TabuSearch(ScheduleEvaluator scheduleEvaluator, INeighbourhood neighbourhood, int tenure, int maxIterationsWithoutImprovement, IStartDecoder startDecoder) {
         this(scheduleEvaluator, neighbourhood, tenure, maxIterationsWithoutImprovement, startDecoder, 42L);
     }
 
-    public TabuSearch(ScheduleEvaluator scheduleEvaluator, INeighbourhood neighbourhood, int tenure, int maxIterationsWithoutImprovement, IStartDecoder startDecoder, long tieBreakSeed) {
+
+    public TabuSearch(ScheduleEvaluator scheduleEvaluator, INeighbourhood neighbourhood, int tenure, int maxIterationsWithoutImprovement, IStartDecoder startDecoder, long seed) {
         this.scheduleEvaluator = scheduleEvaluator;
         this.neighbourhood = neighbourhood;
         this.tenure = tenure;
         this.maxIterationsWithoutImprovement = maxIterationsWithoutImprovement;
         this.startDecoder = startDecoder;
-        this.random = new Random(tieBreakSeed);
+        this.random = new Random(seed);
     }
 
     public TabuSearch withVerbose(boolean verbose) {
@@ -45,72 +51,81 @@ public class TabuSearch implements ISearchAlgorithm {
     }
 
     @Override
-    public Schedule solve(JsspProblem jsspProblem) {
+    public Schedule solve(JsspProblem problem) {
         history.clear();
-        MachineSequences current = startDecoder.decode(jsspProblem);
-        MachineSequences best = current;
+        MachineSequences current = startDecoder.decode(problem);
         ScheduleEvaluator.EvaluationResult currentResult = scheduleEvaluator.evaluate(current);
-        double bestScore = calculateScore(currentResult);
+        MachineSequences best = current.copy();
+        int bestScore = calculateScore(currentResult);
+        int bestMakespan = currentResult.makespan();
 
         TabuList tabu = new TabuList();
 
         int iteration = 0;
-        int sinceImprovement = 0;
+        int noImprovement = 0;
 
-
-        while (sinceImprovement < maxIterationsWithoutImprovement) {
+        while(noImprovement < maxIterationsWithoutImprovement) {
             iteration++;
             currentResult = scheduleEvaluator.evaluate(current);
             List<Move> neighbours = neighbourhood.generate(currentResult, current);
-            if (neighbours.isEmpty()) {
-                break;
-            }
+
+            if(neighbours.isEmpty()) { break; }
+
             Move bestMove = null;
-            double bestMoveScore = Double.MAX_VALUE;
+            ScheduleEvaluator.EvaluationResult bestMoveResult = null;
+            int bestMoveScore = Integer.MAX_VALUE;
 
             for (Move move : neighbours) {
-                ScheduleEvaluator.EvaluationResult resultMove = scheduleEvaluator.evaluateMove(current, move, currentResult.head(), currentResult.tail());
-                double moveScore = calculateScore(resultMove);
-                boolean isTabu = tabu.isTabu(move.getAttribute(), iteration);
-                boolean aspiration = moveScore < bestScore;
+                MachineSequences candidate = current.swapped(move);
+                ScheduleEvaluator.EvaluationResult result = scheduleEvaluator.evaluate(candidate);
+                int score = calculateScore(result);
+                boolean tabuMove = tabu.isTabu(move.getAttribute(), iteration);
+                boolean aspiration = score < bestScore;
 
-                if ((!isTabu || aspiration) && moveScore < bestMoveScore) {
+                if((!tabuMove || aspiration) && score < bestMoveScore) {
                     bestMove = move;
-                    bestMoveScore = moveScore;
+                    bestMoveResult = result;
+                    bestMoveScore = score;
                 }
             }
 
-            if (bestMove == null) {
+            if(bestMove == null) {
                 bestMove = neighbours.get(random.nextInt(neighbours.size()));
-                bestMoveScore = calculateScore(scheduleEvaluator.evaluateMove(current, bestMove, currentResult.head(), currentResult.tail()));
+                bestMoveResult = scheduleEvaluator.evaluate(current.swapped(bestMove));
+                bestMoveScore = calculateScore(bestMoveResult);
             }
 
             current = current.swapped(bestMove);
             tabu.setTabu(bestMove.getAttribute(), iteration + tenure);
 
             if (bestMoveScore < bestScore) {
-                best = current;
+                best = current.copy();
                 bestScore = bestMoveScore;
-                sinceImprovement = 0;
+                bestMakespan = bestMoveResult.makespan();
+                noImprovement = 0;
             } else {
-                sinceImprovement++;
+                noImprovement++;
             }
 
-            ScheduleEvaluator.EvaluationResult currentEvaluation = scheduleEvaluator.evaluate(current);
-            history.add(new IterationSnapshot(iteration, currentEvaluation.makespan(), scheduleEvaluator.evaluate(best).makespan()));
+            history.add(new IterationSnapshot(iteration, bestMoveResult.makespan(), bestMakespan));
 
-            if (verbose) {
-                System.out.println("Iteration: " + iteration + ", score: " + bestMoveScore + ", makespan: " + currentEvaluation.makespan() + ", dwell violations: " + currentEvaluation.dwellViolations()
-                );
+            if(verbose) {
+                System.out.println("Iteration " + iteration + " makespan=" + bestMoveResult.makespan() + " violations=" + bestMoveResult.violationCount() + " bestScore=" + bestScore);
             }
 
         }
-        ScheduleEvaluator.EvaluationResult resultBest = scheduleEvaluator.evaluate(best);
-        return scheduleEvaluator.toSchedule(resultBest);
+
+        ScheduleEvaluator.EvaluationResult result = scheduleEvaluator.evaluate(best);
+        return scheduleEvaluator.toSchedule(result);
     }
 
-    private double calculateScore(ScheduleEvaluator.EvaluationResult result) {
-        int violations = result.dwellViolations();
-        return violations * 100000 + result.makespan();
+    private int calculateScore(ScheduleEvaluator.EvaluationResult result) {
+        long penalty = 0;
+        for (ScheduleEvaluator.DwellViolation violation : result.dwellViolations()) {
+            penalty += violation.excess() * 100000L;
+        }
+
+        long score = penalty * 100000L + result.makespan();
+        return score > Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) score;
     }
 }

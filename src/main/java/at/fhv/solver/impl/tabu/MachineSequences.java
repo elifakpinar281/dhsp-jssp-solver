@@ -54,4 +54,8 @@ public class MachineSequences {
         operations.set(iB, temp);
         return new MachineSequences(newOrderPerMachine);
     }
+
+    public MachineSequences copy() {
+        return new MachineSequences(orderPerMachine);
+    }
 }

@@ -16,8 +16,33 @@ public class ScheduleEvaluator {
             List<Operation> criticalPath,
             Map<Operation, Integer> head,
             Map<Operation, Integer> tail,
-            boolean dwellFeasible,
-            int dwellViolations
+            List<DwellViolation> dwellViolations
+    ) {
+
+        public boolean dwellFeasible() {
+            return dwellViolations.isEmpty();
+        }
+
+        public int violationCount() {
+            return dwellViolations.size();
+        }
+
+        public int violationPenalty() {
+            int penalty = 0;
+
+            for (DwellViolation violation : dwellViolations) {
+                penalty += violation.excess();
+            }
+
+            return penalty;
+        }
+    }
+
+    public record DwellViolation(
+            Operation operation,
+            int dwell,
+            int maxDwell,
+            int excess
     ) {}
 
     public EvaluationResult evaluate(MachineSequences sequences) {
@@ -74,25 +99,25 @@ public class ScheduleEvaluator {
             }
         }
 
-        int dwellViolations = countDwellViolations(head);
-        return new EvaluationResult(makespan, criticalPath, head, tail, dwellViolations == 0, dwellViolations);
+        List<DwellViolation> dwellViolations = findDwellViolations(head);
+        return new EvaluationResult(makespan, criticalPath, head, tail, dwellViolations);
     }
 
-    private int countDwellViolations(Map<Operation, Integer> head) {
-        int violations = 0;
+    private List<DwellViolation> findDwellViolations(Map<Operation, Integer> head) {
+        List<DwellViolation> violations = new ArrayList<>();
 
         for (Job job : jsspProblem.getJobs()) {
             List<Operation> operations = job.operations();
             for (int i = 0; i < operations.size() - 1; i++) {
                 Operation operation = operations.get(i);
-
                 if (!operation.hasDwellLimit()) { continue;}
                 Operation successor = operations.get(i + 1);
-
                 int operationEnd = head.get(operation) + operation.processingTime();
                 int dwell = head.get(successor) - operationEnd;
 
-                if (dwell > operation.maxDwellTime()) { violations++;}
+                if (dwell > operation.maxDwellTime()) {
+                    violations.add(new DwellViolation(operation, dwell, operation.maxDwellTime(), dwell - operation.maxDwellTime()));
+                }
             }
         }
         return violations;
@@ -208,9 +233,8 @@ public class ScheduleEvaluator {
                 criticalPath.add(op);
             }
         }
-
-        int dwellViolations = countDwellViolations(head);
-        return new EvaluationResult(makespan, criticalPath, head, tail, dwellViolations == 0, dwellViolations);
+        List<DwellViolation> dwellViolations = findDwellViolations(head);
+        return new EvaluationResult(makespan, criticalPath, head, tail, dwellViolations);
     }
 
     private Set<Operation> forwardReachable(Set<Operation> start, MachineSequences sequences) {

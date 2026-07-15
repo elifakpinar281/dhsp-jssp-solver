@@ -4,6 +4,7 @@ import at.fhv.evaluation.IHeuristic;
 import at.fhv.evaluation.implementation.MakespanEstimateHeuristic;
 import at.fhv.experiment.RunLog;
 import at.fhv.experiment.RunLogWriter;
+import at.fhv.model.exception.SolveFailedException;
 import at.fhv.model.jssp.JsspProblem;
 import at.fhv.model.jssp.Schedule;
 import at.fhv.solver.ISearchAlgorithm;
@@ -40,7 +41,7 @@ import java.util.Random;
 //.\gradlew.bat run --args="run --algo GREEDY,BEAM,TABU --instance benchmarks/ft06.txt,benchmarks/demoanlage.txt"
 
 public class Main {
-    private static final long GREEDY_MAX_EXPANSIONS = 400_000;
+    private static final long GREEDY_MAX_EXPANSIONS = 100_000_000;
     private static final DateTimeFormatter STAMP = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss");
 
     public static void main(String[] args) throws IOException {
@@ -83,10 +84,11 @@ public class Main {
 
         Parser parser = new Parser();
         int written = 0;
+        List<String> failures = new ArrayList<>();
 
         for (String instance : instances) {
             JsspProblem problem = parser.parse(instance);
-            System.out.println("-> " + instance + " (" + problem.getJobs().size() + " jobs, " + problem.getMachines().size() + " machines)");
+            System.out.println("== " + instance + " (" + problem.getJobs().size() + " jobs, " + problem.getMachines().size() + " machines) ==");
 
             for (String algorithm : algorithms) {
                 for (Map<String, Object> params : parameterSets(algorithm, beamWidths, tenures, noImprovements, seeds)) {
@@ -94,14 +96,28 @@ public class Main {
                     writer.write(log);
                     written++;
                     System.out.println("  " + log.runId() + "  makespan=" + (log.makespan() == null ? "-" : log.makespan()) + " valid=" + log.valid() + " time=" + log.timeMs() + "ms");
+
+                    if (log.makespan() == null) {
+                        failures.add(log.runId() + ": no schedule found (search gave up / dead-ended before reaching a goal)");
+                    } else if (!log.valid()) {
+                        failures.add(log.runId() + ": schedule is INVALID -> " + log.violations());
+                    }
                 }
             }
         }
         System.out.println(written + " log(s) written. Next: python3 tools/build_report.py");
+
+        if (!failures.isEmpty()) {
+            StringBuilder message = new StringBuilder();
+            message.append(failures.size()).append(" of ").append(written).append(" run(s) failed to produce a valid schedule:\n");
+            for (String failure : failures) {
+                message.append("  - ").append(failure).append("\n");
+            }
+            throw new SolveFailedException(message.toString());
+        }
     }
 
-    private static List<Map<String, Object>> parameterSets(String algorithm, List<String> beamWidths, List<String> tenures, List<String> noImprovements,
-                                                           List<String> seeds) {
+    private static List<Map<String, Object>> parameterSets(String algorithm, List<String> beamWidths, List<String> tenures, List<String> noImprovements, List<String> seeds) {
         List<Map<String, Object>> sets = new ArrayList<>();
         String algo = algorithm.toUpperCase();
 
@@ -188,7 +204,15 @@ public class Main {
                 ScheduleEvaluator evaluator = new ScheduleEvaluator(problem);
                 INeighbourhood neighbourhood = new DwellRepairNeighbourhood(new N5Neighbourhood(), problem);
                 IStartDecoder decoder = new DwellStartDecoder(new Random(seed));
-                TabuSearch tabuSearch = new TabuSearch(evaluator, neighbourhood, (Integer) params.get("tenure"), (Integer) params.get("noImprove"), decoder, seed).withVerbose(false);
+
+                TabuSearch tabuSearch = new TabuSearch(
+                                evaluator,
+                                neighbourhood,
+                                (Integer) params.get("tenure"),
+                                (Integer) params.get("noImprove"),
+                                decoder,
+                                seed
+                        ).withVerbose(false);
                 tabuRef[0] = tabuSearch;
                 return tabuSearch;
             default:
