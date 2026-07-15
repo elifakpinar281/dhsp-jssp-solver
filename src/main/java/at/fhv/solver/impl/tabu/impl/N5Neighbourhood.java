@@ -18,10 +18,8 @@ public class N5Neighbourhood implements INeighbourhood {
 
         for (List<Operation> block : blocks) {
             int n = block.size();
-            moves.add(new Move(block.get(0), block.get(1), block.get(0).machineId()));
-
-            if (n >= 3) {
-                moves.add(new Move(block.get(n - 2), block.get(n - 1), block.get(n - 1).machineId()));
+            for (int i = 0; i + 1 < n; i++) {
+                moves.add(new Move(block.get(i), block.get(i + 1), block.get(i).machineId()));
             }
         }
 

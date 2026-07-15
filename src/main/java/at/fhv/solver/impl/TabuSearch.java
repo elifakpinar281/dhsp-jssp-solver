@@ -59,120 +59,155 @@ public class TabuSearch implements ISearchAlgorithm {
         return history;
     }
 
+    private static final class SearchState {
+        MachineSequences current;
+        ScheduleEvaluator.EvaluationResult currentResult;
+        MachineSequences best;
+        long bestScore;
+        int bestMakespan;
+        boolean bestFeasible;
+        MachineSequences bestFeasibleSequences;
+        long bestFeasibleMakespan;
+        TabuList tabu;
+        int noImprovement;
+        int restarts;
+    }
+
     @Override
     public Schedule solve(JsspProblem problem) {
         history.clear();
 
-        MachineSequences current = startDecoder.decode(problem);
-        ScheduleEvaluator.EvaluationResult currentResult = scheduleEvaluator.evaluate(current);
+        SearchState s = new SearchState();
+        s.current = startDecoder.decode(problem);
+        s.currentResult = scheduleEvaluator.evaluate(s.current);
 
-        MachineSequences best = current.copy();
-        long bestScore = calculateScore(currentResult);
-        int bestMakespan = currentResult.makespan();
-        boolean bestFeasible = currentResult.dwellFeasible();
+        s.best = s.current.copy();
+        s.bestScore = calculateScore(s.currentResult);
+        s.bestMakespan = s.currentResult.makespan();
+        s.bestFeasible = s.currentResult.dwellFeasible();
 
-        MachineSequences bestFeasibleSequences = null;
-        long bestFeasibleMakespan = Long.MAX_VALUE;
-        if (currentResult.dwellFeasible()) {
-            bestFeasibleSequences = current.copy();
-            bestFeasibleMakespan = currentResult.makespan();
+        s.bestFeasibleSequences = null;
+        s.bestFeasibleMakespan = Long.MAX_VALUE;
+        if (s.currentResult.dwellFeasible()) {
+            s.bestFeasibleSequences = s.current.copy();
+            s.bestFeasibleMakespan = s.currentResult.makespan();
         }
 
-        TabuList tabu = new TabuList();
+        s.tabu = new TabuList();
 
         int iteration = 0;
-        int noImprovement = 0;
-        int restarts = 0;
+        s.noImprovement = 0;
+        s.restarts = 0;
 
-        while (noImprovement < maxIterationsWithoutImprovement) {
+        while (s.noImprovement < maxIterationsWithoutImprovement) {
             iteration++;
 
-            List<Move> neighbours = neighbourhood.generate(currentResult, current);
-            if (neighbours.isEmpty()) { break; }
+            List<Move> neighbours = neighbourhood.generate(s.currentResult, s.current);
+            if (neighbours.isEmpty()) {
+                s.noImprovement++;
+                tryRestart(s, problem);
+                continue;
+            }
 
-            Move bestMove = null;
+            List<Move> bestCandidates = new ArrayList<>();
             ScheduleEvaluator.EvaluationResult bestMoveResult;
             long bestMoveScore = Long.MAX_VALUE;
 
             List<Move> feasibleMoves = new ArrayList<>();
 
             for (Move move : neighbours) {
-                ScheduleEvaluator.QuickResult quick = scheduleEvaluator.quickEvaluate(current.swapped(move));
+                ScheduleEvaluator.QuickResult quick = scheduleEvaluator.quickEvaluate(s.current.swapped(move));
                 if (!quick.feasible()) { continue; }
                 feasibleMoves.add(move);
 
-                boolean tabuMove = tabu.isTabu(move.getAttribute(), iteration);
-                boolean aspiration = quick.makespan() < bestScore;
+                boolean tabuMove = s.tabu.isTabu(move.getAttribute(), iteration);
+                boolean aspiration = quick.makespan() < s.bestScore;
 
-                if ((!tabuMove || aspiration) && quick.makespan() < bestMoveScore) {
-                    bestMove = move;
-                    bestMoveScore = quick.makespan();
+                if (!tabuMove || aspiration) {
+                    if (quick.makespan() < bestMoveScore) {
+                        bestMoveScore = quick.makespan();
+                        bestCandidates.clear();
+                        bestCandidates.add(move);
+                    } else if (quick.makespan() == bestMoveScore) {
+                        bestCandidates.add(move);
+                    }
                 }
             }
 
-            if (feasibleMoves.isEmpty()) { noImprovement++; continue; }
-
-            if (bestMove == null) {
-                bestMove = feasibleMoves.get(random.nextInt(feasibleMoves.size()));
+            if (feasibleMoves.isEmpty()) {
+                s.noImprovement++;
+                tryRestart(s, problem);
+                continue;
             }
 
-            bestMoveResult = scheduleEvaluator.evaluate(current.swapped(bestMove));
+            Move bestMove = bestCandidates.isEmpty()
+                    ? feasibleMoves.get(random.nextInt(feasibleMoves.size()))
+                    : bestCandidates.get(random.nextInt(bestCandidates.size()));
+
+            bestMoveResult = scheduleEvaluator.evaluate(s.current.swapped(bestMove));
             bestMoveScore = calculateScore(bestMoveResult);
 
-            current = current.swapped(bestMove);
-            currentResult = bestMoveResult;
-            tabu.setTabu(bestMove.getAttribute(), iteration + tenure);
+            s.current = s.current.swapped(bestMove);
+            s.currentResult = bestMoveResult;
+            s.tabu.setTabu(bestMove.getAttribute(), iteration + tenure);
 
-            if (bestMoveResult.dwellFeasible() && bestMoveResult.makespan() < bestFeasibleMakespan) {
-                bestFeasibleSequences = current.copy();
-                bestFeasibleMakespan = bestMoveResult.makespan();
+            if (bestMoveResult.dwellFeasible() && bestMoveResult.makespan() < s.bestFeasibleMakespan) {
+                s.bestFeasibleSequences = s.current.copy();
+                s.bestFeasibleMakespan = bestMoveResult.makespan();
             }
 
-            if (bestMoveScore < bestScore) {
-                best = current.copy();
-                bestScore = bestMoveScore;
-                bestMakespan = bestMoveResult.makespan();
-                bestFeasible = bestMoveResult.dwellFeasible();
-                noImprovement = 0;
+            if (bestMoveScore < s.bestScore) {
+                s.best = s.current.copy();
+                s.bestScore = bestMoveScore;
+                s.bestMakespan = bestMoveResult.makespan();
+                s.bestFeasible = bestMoveResult.dwellFeasible();
+                s.noImprovement = 0;
             } else {
-                noImprovement++;
+                s.noImprovement++;
             }
 
-            history.add(new IterationSnapshot(iteration, bestMoveResult.makespan(), bestMakespan));
+            history.add(new IterationSnapshot(iteration, bestMoveResult.makespan(), s.bestMakespan));
 
             if (verbose) {
-                System.out.println("Iteration " + iteration + " makespan=" + bestMoveResult.makespan() + " violations=" + bestMoveResult.violationCount() + " bestScore=" + bestScore);
+                System.out.println("Iteration " + iteration + " makespan=" + bestMoveResult.makespan() + " violations=" + bestMoveResult.violationCount() + " bestScore=" + s.bestScore);
             }
 
-            if (!bestFeasible && noImprovement >= restartThreshold && restarts < maxRestarts) {
-                restarts++;
-                current = startDecoder.decode(problem);
-                currentResult = scheduleEvaluator.evaluate(current);
-                tabu = new TabuList();
-                noImprovement = 0;
-
-                if (verbose) {
-                    System.out.println("Restart " + restarts + " (noch keine machbare Loesung gefunden)");
-                }
-
-                long score = calculateScore(currentResult);
-                if (currentResult.dwellFeasible() && currentResult.makespan() < bestFeasibleMakespan) {
-                    bestFeasibleSequences = current.copy();
-                    bestFeasibleMakespan = currentResult.makespan();
-                }
-                if (score < bestScore) {
-                    best = current.copy();
-                    bestScore = score;
-                    bestMakespan = currentResult.makespan();
-                    bestFeasible = currentResult.dwellFeasible();
-                }
-            }
+            tryRestart(s, problem);
         }
 
-        if (bestFeasibleSequences == null) { return null; }
+        if (s.bestFeasibleSequences == null) { return null; }
 
-        ScheduleEvaluator.EvaluationResult result = scheduleEvaluator.evaluate(bestFeasibleSequences);
+        ScheduleEvaluator.EvaluationResult result = scheduleEvaluator.evaluate(s.bestFeasibleSequences);
         return scheduleEvaluator.toSchedule(result);
+    }
+
+    private boolean tryRestart(SearchState s, JsspProblem problem) {
+        if (s.noImprovement < restartThreshold || s.restarts >= maxRestarts) { return false; }
+
+        s.restarts++;
+        s.current = startDecoder.decode(problem);
+        s.currentResult = scheduleEvaluator.evaluate(s.current);
+        s.tabu = new TabuList();
+        s.noImprovement = 0;
+
+        if (verbose) {
+            String reason = s.bestFeasible ? "Diversifikation nach Stagnation" : "noch keine machbare Loesung gefunden";
+            System.out.println("Restart " + s.restarts + " (" + reason + ")");
+        }
+
+        long score = calculateScore(s.currentResult);
+        if (s.currentResult.dwellFeasible() && s.currentResult.makespan() < s.bestFeasibleMakespan) {
+            s.bestFeasibleSequences = s.current.copy();
+            s.bestFeasibleMakespan = s.currentResult.makespan();
+        }
+        if (score < s.bestScore) {
+            s.best = s.current.copy();
+            s.bestScore = score;
+            s.bestMakespan = s.currentResult.makespan();
+            s.bestFeasible = s.currentResult.dwellFeasible();
+        }
+
+        return true;
     }
 
     private long calculateScore(ScheduleEvaluator.EvaluationResult result) {
