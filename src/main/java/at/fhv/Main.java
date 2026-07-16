@@ -13,11 +13,13 @@ import at.fhv.solver.impl.BeamSearch;
 import at.fhv.solver.impl.GreedySearch;
 import at.fhv.solver.impl.TabuSearch;
 import at.fhv.solver.impl.decoder.DwellStartDecoder;
+import at.fhv.solver.impl.decoder.StartDecoder;
 import at.fhv.solver.impl.tabu.INeighbourhood;
 import at.fhv.solver.impl.tabu.ScheduleEvaluator;
 import at.fhv.solver.impl.tabu.impl.AdjacentSwapNeighbourhood;
-import at.fhv.solver.impl.tabu.impl.DwellRepairNeighbourhood;
+import at.fhv.solver.impl.tabu.impl.N1Neighbourhood;
 import at.fhv.solver.impl.tabu.impl.N5Neighbourhood;
+import at.fhv.solver.impl.tabu.impl.N6Neighbourhood;
 import at.fhv.solver.validation.MemorySampler;
 import at.fhv.solver.validation.ScheduleValidator;
 import at.fhv.solver.validation.ValidationResult;
@@ -45,6 +47,7 @@ import java.util.Random;
 public class Main {
     private static final long GREEDY_MAX_EXPANSIONS = 1_000_000;
     private static final int GREEDY_MAX_NODES = 1_500_000;
+    private static final int WARM_START_BEAM_WIDTH = 100;
     private static final DateTimeFormatter STAMP = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss");
 
     public static void main(String[] args) throws IOException {
@@ -66,7 +69,8 @@ public class Main {
     private static void printUsage() {
         System.out.println("Commands:");
         System.out.println("  run  [--algo GREEDY|BEAM|TABU] [--instance <path>] [--beam <k>]");
-        System.out.println("  [--tenure <n>] [--noimp <n>] [--seed <n>] [--out <folder>]");
+        System.out.println("  [--tenure <n>] [--noimp <n>] [--seed <n>] [--nb AUTO|N1|N5|N6|ADJ]");
+        System.out.println("  [--start COLD|WARM] [--out <folder>]");
         System.out.println("  Lists (1,5,20) and ranges (1-20) are allowed.");
         System.out.println("  charts  PNG charts from docs/assets/**/*-samples.csv");
         System.out.println();
@@ -83,6 +87,8 @@ public class Main {
         List<String> tenures = options(args, "--tenure", "10");
         List<String> noImprovements = options(args, "--noimp", "300");
         List<String> seeds = options(args, "--seed", "42");
+        List<String> neighbourhoods = options(args, "--nb", "AUTO");
+        List<String> starts = options(args, "--start", "COLD");
         Path outFolder = Path.of(option(args, "--out", "runs"));
         RunLogWriter writer = new RunLogWriter(outFolder);
 
@@ -95,7 +101,7 @@ public class Main {
             System.out.println("== " + instance + " (" + problem.getJobs().size() + " jobs, " + problem.getMachines().size() + " machines) ==");
 
             for (String algorithm : algorithms) {
-                for (Map<String, Object> params : parameterSets(algorithm, beamWidths, tenures, noImprovements, seeds)) {
+                for (Map<String, Object> params : parameterSets(algorithm, beamWidths, tenures, noImprovements, seeds, neighbourhoods, starts)) {
                     boolean[] stoppedByLimit = new boolean[1];
                     RunLog log = solveOnce(instance, problem, algorithm.toUpperCase(), params, outFolder, stoppedByLimit);
                     writer.write(log);
@@ -103,11 +109,7 @@ public class Main {
                     System.out.println("  " + log.runId() + "  makespan=" + (log.makespan() == null ? "-" : log.makespan()) + " valid=" + log.valid() + " time=" + log.timeMs() + "ms");
 
                     if (log.makespan() == null) {
-                        failures.add(log.runId() + ": no schedule found ("
-                                + (stoppedByLimit[0]
-                                ? "gave up at the configured limit after " + log.expanded() + " expansions / " + log.reached() + " reached states"
-                                : "dead-ended before reaching a goal")
-                                + ")");
+                        failures.add(log.runId() + ": no schedule found (" + (stoppedByLimit[0] ? "gave up at the configured limit after " + log.expanded() + " expansions / " + log.reached() + " reached states" : "dead-ended before reaching a goal") + ")");
                     } else if (!log.valid()) {
                         failures.add(log.runId() + ": schedule is INVALID -> " + log.violations());
                     }
@@ -126,7 +128,7 @@ public class Main {
         }
     }
 
-    private static List<Map<String, Object>> parameterSets(String algorithm, List<String> beamWidths, List<String> tenures, List<String> noImprovements, List<String> seeds) {
+    private static List<Map<String, Object>> parameterSets(String algorithm, List<String> beamWidths, List<String> tenures, List<String> noImprovements, List<String> seeds, List<String> neighbourhoods, List<String> starts) {
         List<Map<String, Object>> sets = new ArrayList<>();
         String algo = algorithm.toUpperCase();
 
@@ -143,14 +145,20 @@ public class Main {
             return sets;
         }
         if (algo.equals("TABU")) {
-            for (String tenure : tenures) {
-                for (String noImprove : noImprovements) {
-                    for (String seed : seeds) {
-                        Map<String, Object> params = new LinkedHashMap<>();
-                        params.put("tenure", Integer.parseInt(tenure));
-                        params.put("noImprove", Integer.parseInt(noImprove));
-                        params.put("seed", Long.parseLong(seed));
-                        sets.add(params);
+            for (String start : starts) {
+                for (String neighbourhood : neighbourhoods) {
+                    for (String tenure : tenures) {
+                        for (String noImprove : noImprovements) {
+                            for (String seed : seeds) {
+                                Map<String, Object> params = new LinkedHashMap<>();
+                                params.put("start", start.toUpperCase());
+                                params.put("nb", neighbourhood.toUpperCase());
+                                params.put("tenure", Integer.parseInt(tenure));
+                                params.put("noImprove", Integer.parseInt(noImprove));
+                                params.put("seed", Long.parseLong(seed));
+                                sets.add(params);
+                            }
+                        }
                     }
                 }
             }
@@ -162,10 +170,7 @@ public class Main {
     private static RunLog solveOnce(String instance, JsspProblem problem, String algorithm, Map<String, Object> params, Path outFolder, boolean[] stoppedByLimit) throws IOException {
         IHeuristic heuristic = new MakespanEstimateHeuristic(problem);
         ScheduleValidator validator = new ScheduleValidator();
-
-        SearchStatistics statistics = algorithm.equals("GREEDY")
-                ? new SearchStatistics(1000, GREEDY_MAX_EXPANSIONS)
-                : new SearchStatistics();
+        SearchStatistics statistics = algorithm.equals("GREEDY") ? new SearchStatistics(1000, GREEDY_MAX_EXPANSIONS) : new SearchStatistics();
 
         String runId = runId(instance, algorithm, params);
         Files.createDirectories(outFolder);
@@ -217,10 +222,8 @@ public class Main {
             case "TABU":
                 long seed = (Long) params.get("seed");
                 ScheduleEvaluator evaluator = new ScheduleEvaluator(problem);
-                INeighbourhood neighbourhood = problem.isBlocking()
-                        ? new AdjacentSwapNeighbourhood()
-                        : new DwellRepairNeighbourhood(new N5Neighbourhood(), problem);
-                IStartDecoder decoder = new DwellStartDecoder(new Random(seed));
+                INeighbourhood neighbourhood = buildNeighbourhood((String) params.get("nb"), problem);
+                IStartDecoder decoder = buildStartDecoder((String) params.get("start"), problem, heuristic, seed);
 
                 TabuSearch tabuSearch = new TabuSearch(
                         evaluator,
@@ -234,6 +237,41 @@ public class Main {
                 return tabuSearch;
             default:
                 throw new IllegalArgumentException("Unknown algorithm: " + algorithm);
+        }
+    }
+
+
+    private static IStartDecoder buildStartDecoder(String name, JsspProblem problem, IHeuristic heuristic, long seed) {
+        IStartDecoder cold = new DwellStartDecoder(new Random(seed));
+        String selected = name == null ? "COLD" : name.toUpperCase();
+
+        switch (selected) {
+            case "COLD":
+                return cold;
+            case "WARM":
+                return new StartDecoder(new BeamSearch(heuristic, WARM_START_BEAM_WIDTH, new SearchStatistics()), cold);
+            default:
+                throw new IllegalArgumentException("Unknown start: " + name);
+        }
+    }
+
+    private static INeighbourhood buildNeighbourhood(String name, JsspProblem problem) {
+        String selected = name == null ? "AUTO" : name.toUpperCase();
+        if (selected.equals("AUTO")) {
+            selected = problem.isBlocking() ? "ADJ" : "N5";
+        }
+
+        switch (selected) {
+            case "N1":
+                return new N1Neighbourhood();
+            case "N5":
+                return new N5Neighbourhood();
+            case "N6":
+                return new N6Neighbourhood();
+            case "ADJ":
+                return new AdjacentSwapNeighbourhood();
+            default:
+                throw new IllegalArgumentException("Unknown neighbourhood: " + name);
         }
     }
 

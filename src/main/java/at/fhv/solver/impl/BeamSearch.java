@@ -26,8 +26,8 @@ public class BeamSearch implements ISearchAlgorithm {
         double heuristicValue = heuristic.evaluate(initialState);
         Node initialNode = new Node(initialState, null, heuristicValue, null);
 
-        List<Node> beam = new ArrayList<>();
-        beam.add(initialNode);
+        TreeMap<Integer, List<Node>> levels = new TreeMap<>();
+        levels.computeIfAbsent(scheduledCount(initialState), key -> new ArrayList<>()).add(initialNode);
 
         Set<State> visited = new HashSet<>();
         visited.add(initialState);
@@ -38,15 +38,19 @@ public class BeamSearch implements ISearchAlgorithm {
 
         Node bestGoal = null;
 
-        while (!beam.isEmpty()) {
-            List<Node> candidates = new ArrayList<>();
+        while (!levels.isEmpty()) {
+            Map.Entry<Integer, List<Node>> entry = levels.pollFirstEntry();
+            int depth = entry.getKey();
+            List<Node> level = entry.getValue();
+
+            if (depth > maxDepth) { maxDepth = depth; }
+
+            level.sort(Comparator.comparingDouble(Node::heuristicValue));
+            List<Node> beam = level.subList(0, Math.min(beamWidth, level.size()));
 
             for (Node node : beam) {
-                int depth = scheduledCount(node.state());
-                if (depth > maxDepth) {maxDepth = depth;}
-
                 if (jsspProblem.isGoal(node.state())) {
-                    if (bestGoal == null || node.heuristicValue() < bestGoal.heuristicValue()) {
+                    if (bestGoal == null || makespanOf(node) < makespanOf(bestGoal)) {
                         bestGoal = node;
                     }
                     continue;
@@ -55,31 +59,29 @@ public class BeamSearch implements ISearchAlgorithm {
 
                 for (Node child : expand(node, jsspProblem)) {
                     State childState = child.state();
-                    if (!visited.contains(childState)) {
-                        visited.add(childState);
-                        candidates.add(child);
-                    }
+                    if (visited.contains(childState)) { continue; }
+                    visited.add(childState);
+                    levels.computeIfAbsent(scheduledCount(childState), key -> new ArrayList<>()).add(child);
                 }
-            }
-
-            if (bestGoal != null) {
-                statistics.record(expanded, visited.size(), beam.size(), maxDepth);
-                return new Schedule(buildSchedule(bestGoal));
-            }
-
-            candidates.sort(Comparator.comparingDouble(Node::heuristicValue));
-            beam.clear();
-
-            for (int i = 0; i < Math.min(beamWidth, candidates.size()); i++) {
-                beam.add(candidates.get(i));
             }
 
             statistics.record(expanded, visited.size(), beam.size(), maxDepth);
             if (statistics.limitReached(expanded)) {
-                return null;
+                statistics.markStoppedByLimit();
+                return bestGoal == null ? null : new Schedule(buildSchedule(bestGoal));
             }
         }
-        return null;
+
+        if (bestGoal == null) { return null; }
+        return new Schedule(buildSchedule(bestGoal));
+    }
+
+    private int makespanOf(Node node) {
+        int makespan = 0;
+        for (int available : node.state().jobAvailableTime()) {
+            makespan = Math.max(makespan, available);
+        }
+        return makespan;
     }
 
     private State createInitialState(JsspProblem jsspProblem) {
@@ -95,7 +97,7 @@ public class BeamSearch implements ISearchAlgorithm {
         List<Node> children = new ArrayList<>();
         for (Operation operation : jsspProblem.getAvailableOperations(node.state())) {
             Transition transition = jsspProblem.applyOperation(node.state(), operation);
-            if (transition == null ) {continue;}
+            if (transition == null) { continue; }
             double heuristicValue = heuristic.evaluate(transition.state());
             children.add(new Node(transition.state(), node, heuristicValue, transition.scheduledOperations()));
         }

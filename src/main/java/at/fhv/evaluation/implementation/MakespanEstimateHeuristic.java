@@ -22,9 +22,8 @@ public class MakespanEstimateHeuristic implements IHeuristic {
 
     @Override
     public double evaluate(State state) {
-        int maxRemaining = 0;
+        int jobBound = 0;
         double penalty = 0.0;
-
 
         for (int jobId = 0; jobId < jsspProblem.getJobs().size(); jobId++) {
             List<Operation> operations = jsspProblem.getJobs().get(jobId).operations();
@@ -36,12 +35,45 @@ public class MakespanEstimateHeuristic implements IHeuristic {
                 remaining += operations.get(i).processingTime();
             }
 
-            maxRemaining = Math.max(maxRemaining, remaining);
+            jobBound = Math.max(jobBound, remaining);
             penalty += calculateDwellPenalty(operations, nextIndex, jobAvailable, state);
         }
-        return maxRemaining + penalty;
+
+        int machineBound = calculateMachineBound(state);
+        return Math.max(jobBound, machineBound) + penalty;
     }
 
+    private int calculateMachineBound(State state) {
+        int machineCount = jsspProblem.getMachines().size();
+        int[] remainingLoad = new int[machineCount];
+
+        for (int jobId = 0; jobId < jsspProblem.getJobs().size(); jobId++) {
+            List<Operation> operations = jsspProblem.getJobs().get(jobId).operations();
+            for (int i = state.nextOperation()[jobId]; i < operations.size(); i++) {
+                Operation operation = operations.get(i);
+                remainingLoad[operation.machineId()] += operation.processingTime();
+            }
+        }
+
+        int machineBound = 0;
+        for (int machineId = 0; machineId < machineCount; machineId++) {
+            if (remainingLoad[machineId] == 0) { continue; }
+
+            int capacity = Math.max(1, jsspProblem.capacityOf(machineId));
+            int offset = jsspProblem.bathOffset(machineId);
+
+            long freeSum = 0;
+            for (int bath = offset; bath < offset + capacity; bath++) {
+                int free = state.bathAvailableTime()[bath];
+                if (free == State.BLOCKED) { free = 0; }
+                freeSum += free;
+            }
+
+            int estimate = (int) ((freeSum + remainingLoad[machineId]) / capacity);
+            machineBound = Math.max(machineBound, estimate);
+        }
+        return machineBound;
+    }
 
     private double calculateDwellPenalty(List<Operation> operations, int nextIndex, int jobAvailable, State state) {
         if (nextIndex <= 0 || nextIndex >= operations.size()) { return 0.0; }
@@ -54,7 +86,7 @@ public class MakespanEstimateHeuristic implements IHeuristic {
         int deadline = predecessorStart + predecessor.maxDwellTime();
         int remainingDwell = deadline - earliestStart;
 
-        if (remainingDwell <= 0) { return weight * 10000;}
+        if (remainingDwell <= 0) { return weight * 10000; }
 
         return weight * (1.0 / remainingDwell) * 1000;
     }

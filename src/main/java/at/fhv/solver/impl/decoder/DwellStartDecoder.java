@@ -15,10 +15,6 @@ public class DwellStartDecoder implements IStartDecoder {
         this(random, 0.34);
     }
 
-    public DwellStartDecoder(Random random, double riskFactor, double restricted) {
-        this(random, restricted);
-    }
-
     public DwellStartDecoder(Random random, double restricted) {
         this.random = random;
         this.restricted = restricted;
@@ -34,7 +30,7 @@ public class DwellStartDecoder implements IStartDecoder {
             MachineSequences sequences = decodeOnce(jsspProblem);
             if (sequences != null) { return sequences; }
         }
-        throw new IllegalStateException("No feasible start solution found after " + MAX_ATTEMPTS + " attempts");
+        throw new IllegalStateException("No valid start solution found after " + MAX_ATTEMPTS + " attempts");
     }
 
     private MachineSequences decodeOnce(JsspProblem jsspProblem) {

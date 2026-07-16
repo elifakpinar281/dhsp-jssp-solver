@@ -6,7 +6,6 @@ import java.util.*;
 
 public class ScheduleEvaluator {
     private static final int NONE = -1;
-
     private final JsspProblem jsspProblem;
 
     private final List<Operation> operations;
@@ -53,66 +52,46 @@ public class ScheduleEvaluator {
 
     public record EvaluationResult(
             int makespan,
+            boolean valid,
             List<Operation> criticalPath,
             Map<Operation, Integer> head,
-            Map<Operation, Integer> tail,
-            List<DwellViolation> dwellViolations
+            Map<Operation, Integer> tail
     ) {
-        public boolean dwellFeasible() {
-            return dwellViolations.isEmpty();
-        }
-
-        public int violationCount() {
-            return dwellViolations.size();
-        }
-
-        public int violationPenalty() {
-            int penalty = 0;
-            for (DwellViolation violation : dwellViolations) {
-                penalty += violation.excess();
-            }
-            return penalty;
-        }
+        public boolean dwellValid() { return valid; }
     }
 
-    public record DwellViolation(Operation operation, int dwell, int maxDwell, int excess) {}
+    public record Result(boolean valid, int makespan) {}
 
-    public record QuickResult(boolean feasible, int makespan) {}
-
-    public QuickResult quickEvaluate(MachineSequences sequences) {
-        if (operationCount == 0) { return new QuickResult(true, 0); }
+    public Result evaluateResult (MachineSequences sequences) {
+        if (operationCount == 0) { return new Result (true, 0); }
 
         int[] machinePredecessor = new int[operationCount];
         int[] machineSuccessor = new int[operationCount];
-        buildMachineLinks(sequences, machinePredecessor, machineSuccessor);
+        buildLinks(sequences, machinePredecessor, machineSuccessor);
 
-        int[] start = solveWithTimeLags(machinePredecessor, machineSuccessor);
-        if (start == null) { return new QuickResult(false, Integer.MAX_VALUE); }
+        int[] start = solveWithLags(machinePredecessor, machineSuccessor);
+        if (start == null) { return new Result(false, Integer.MAX_VALUE); }
 
         int makespan = 0;
         for (int i = 0; i < operationCount; i++) {
             makespan = Math.max(makespan, start[i] + processingTime[i]);
         }
-        return new QuickResult(true, makespan);
+        return new Result(true, makespan);
     }
 
     public EvaluationResult evaluate(MachineSequences sequences) {
         if (operationCount == 0) {
-            return new EvaluationResult(0, new ArrayList<>(), new HashMap<>(), new HashMap<>(), new ArrayList<>());
+            return new EvaluationResult(0, true, new ArrayList<>(), new HashMap<>(), new HashMap<>());
         }
 
         int[] machinePredecessor = new int[operationCount];
         int[] machineSuccessor = new int[operationCount];
-        buildMachineLinks(sequences, machinePredecessor, machineSuccessor);
+        buildLinks(sequences, machinePredecessor, machineSuccessor);
 
-        int[] start = solveWithTimeLags(machinePredecessor, machineSuccessor);
-        List<DwellViolation> violations;
+        int[] start = solveWithLags(machinePredecessor, machineSuccessor);
 
-        if (start != null) { violations = new ArrayList<>();
-        } else {
-            start = earliestStart(machinePredecessor, machineSuccessor);
-            violations = findDwellViolations(start);
-            if (violations.isEmpty()) { violations.add(new DwellViolation(operations.get(0), 0, 0, 1)); }
+        if (start == null) {
+            return new EvaluationResult(Integer.MAX_VALUE, false, new ArrayList<>(), new HashMap<>(), new HashMap<>());
         }
 
         int makespan = 0;
@@ -121,11 +100,11 @@ public class ScheduleEvaluator {
         }
 
         int[] tail = computeTail(machinePredecessor, machineSuccessor);
-        List<Operation> criticalPath = criticalPath(start, machinePredecessor, makespan);
-        return new EvaluationResult(makespan, criticalPath, toMap(start), toMap(tail), violations);
+        List<Operation> criticalPath = criticalPath(start, machinePredecessor, machineSuccessor, makespan);
+        return new EvaluationResult(makespan, true, criticalPath, toMap(start), toMap(tail));
     }
 
-    private void buildMachineLinks(MachineSequences sequences, int[] machinePredecessor, int[] machineSuccessor) {
+    private void buildLinks(MachineSequences sequences, int[] machinePredecessor, int[] machineSuccessor) {
         Arrays.fill(machinePredecessor, NONE);
         Arrays.fill(machineSuccessor, NONE);
 
@@ -141,7 +120,7 @@ public class ScheduleEvaluator {
         }
     }
 
-    private int[] solveWithTimeLags(int[] machinePredecessor, int[] machineSuccessor) {
+    private int[] solveWithLags(int[] machinePredecessor, int[] machineSuccessor) {
         int n = operationCount;
         int[] start = new int[n];
         int[] relaxCount = new int[n];
@@ -215,25 +194,6 @@ public class ScheduleEvaluator {
         return start;
     }
 
-    private int[] earliestStart(int[] machinePredecessor, int[] machineSuccessor) {
-        int[] start = new int[operationCount];
-
-        for (int index : topologicalOrder(machinePredecessor, machineSuccessor)) {
-            int jobEnd = 0;
-            int machineEnd = 0;
-
-            int predecessor = jobPredecessor[index];
-            if (predecessor != NONE) { jobEnd = start[predecessor] + processingTime[predecessor]; }
-
-            int machine = machinePredecessor[index];
-            if (machine != NONE) { machineEnd = start[machine] + processingTime[machine]; }
-
-            start[index] = Math.max(jobEnd, machineEnd);
-        }
-
-        return start;
-    }
-
     private int[] computeTail(int[] machinePredecessor, int[] machineSuccessor) {
         int[] tail = new int[operationCount];
         int[] order = topologicalOrder(machinePredecessor, machineSuccessor);
@@ -251,7 +211,6 @@ public class ScheduleEvaluator {
 
             tail[index] = Math.max(jobTail, machineTail);
         }
-
         return tail;
     }
 
@@ -291,64 +250,67 @@ public class ScheduleEvaluator {
         return result;
     }
 
-    private List<Operation> criticalPath(int[] start, int[] machinePredecessor, int makespan) {
+    private List<Operation> criticalPath(int[] start, int[] machinePredecessor, int[] machineSuccessor, int makespan) {
         int current = NONE;
-        for (int i = 0; i < operationCount; i++) {
+        for(int i = 0; i < operationCount; i++) {
             if (start[i] + processingTime[i] == makespan) {
                 current = i;
                 break;
             }
         }
-
+        List<List<Integer>> blocking = buildBlocking(machineSuccessor);
         List<Operation> path = new ArrayList<>();
-        while (current != NONE) {
+        boolean[] visited = new boolean[operationCount];
+
+        while (current != NONE && !visited[current]) {
             path.add(operations.get(current));
-            int previous = NONE;
-
-            int predecessor = jobPredecessor[current];
-            if (predecessor != NONE && start[predecessor] + processingTime[predecessor] == start[current]) {
-                previous = predecessor;
-            }
-
-            if (previous == NONE) {
-                int machine = machinePredecessor[current];
-                if (machine != NONE && start[machine] + processingTime[machine] == start[current]) {
-                    previous = machine;
-                }
-            }
-
-            if (previous == NONE && jsspProblem.isBlocking()) {
-                int machine = machinePredecessor[current];
-                if (machine != NONE && jobSuccessor[machine] != NONE
-                        && start[jobSuccessor[machine]] == start[current]) {
-                    previous = jobSuccessor[machine];
-                }
-            }
-
-            if (previous == current) { break; }
-            current = previous;
+            visited[current] = true;
+            current = closePredecessor(current, start, machinePredecessor, blocking, visited);
         }
-
         Collections.reverse(path);
         return path;
     }
 
-    private List<DwellViolation> findDwellViolations(int[] start) {
-        List<DwellViolation> violations = new ArrayList<>();
-
+    private List<List<Integer>> buildBlocking(int[] machineSuccessor) {
+        List<List<Integer>> sources = new ArrayList<>();
         for (int i = 0; i < operationCount; i++) {
-            if (maxDwellTime[i] == Operation.NO_LIMIT) { continue; }
-
-            int successor = jobSuccessor[i];
-            if (successor == NONE) { continue; }
-
-            int dwell = start[successor] - start[i];
-            if (dwell > maxDwellTime[i]) {
-                violations.add(new DwellViolation(operations.get(i), dwell, maxDwellTime[i], dwell - maxDwellTime[i]));
-            }
+            sources.add(new ArrayList<>());
         }
 
-        return violations;
+        if (!jsspProblem.isBlocking()) { return sources; }
+
+        for (int j = 0; j < operationCount; j++) {
+            int predecessor = jobPredecessor[j];
+            if (predecessor == NONE) { continue; }
+
+            int target = machineSuccessor[predecessor];
+            if (target == NONE) { continue; }
+
+            sources.get(target).add(j);
+        }
+        return sources;
+    }
+
+    private int closePredecessor(int current, int[] start, int[] machinePredecessor, List<List<Integer>> blocking, boolean[] visited) {
+        int predecessor = jobPredecessor[current];
+        if (predecessor != NONE && isClose(predecessor, processingTime[predecessor], current, start, visited)) { return predecessor; }
+        int machine = machinePredecessor[current];
+        if (machine != NONE && isClose(machine, processingTime[machine], current, start, visited)) { return machine; }
+
+        for (int source : blocking.get(current)) {
+            if (isClose(source, 0, current, start, visited)) { return source; }
+        }
+        int successor = jobSuccessor[current];
+        if (successor != NONE && maxDwellTime[current] != Operation.NO_LIMIT && isClose(successor, -maxDwellTime[current], current, start, visited)) {
+            return successor;
+        }
+
+        return NONE;
+    }
+
+    private boolean isClose(int source, int weight, int target, int[] start, boolean[] visited) {
+        if (source == NONE || visited[source]) { return false; }
+        return start[source] + weight == start[target];
     }
 
     private Map<Operation, Integer> toMap(int[] values) {
@@ -361,7 +323,6 @@ public class ScheduleEvaluator {
 
     public Schedule toSchedule(EvaluationResult result) {
         List<ScheduledOperation> scheduledOperations = new ArrayList<>();
-
         for (Job job : jsspProblem.getJobs()) {
             for (Operation operation : job.operations()) {
                 int start = result.head().get(operation);

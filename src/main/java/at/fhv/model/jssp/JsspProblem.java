@@ -33,9 +33,10 @@ public class JsspProblem {
         this.bathOffset = new int[machines.size()];
 
         int offset = 0;
-        for (int i = 0; i < machines.size(); i++) {
-            capacity[machines.get(i).machineId()] = machines.get(i).capacity();
+        for (Machine machine : machines) {
+            capacity[machine.machineId()] = machine.capacity();
         }
+
         for (int machineId = 0; machineId < machines.size(); machineId++) {
             bathOffset[machineId] = offset;
             offset += capacity[machineId];
@@ -268,15 +269,6 @@ public class JsspProblem {
         }
     }
 
-    public Operation jobPredecessor(Operation operation) {
-        if (operation == null) { return null; }
-        return jobPredecessor.get(operation);
-    }
-
-    public Operation jobSuccessor(Operation operation) {
-        if (operation == null) { return null; }
-        return jobSuccessor.get(operation);
-    }
 
     public List<Machine> getMachines() {
         return machines;

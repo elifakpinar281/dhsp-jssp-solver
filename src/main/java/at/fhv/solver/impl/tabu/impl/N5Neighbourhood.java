@@ -1,55 +1,50 @@
 package at.fhv.solver.impl.tabu.impl;
 
 import at.fhv.model.jssp.Operation;
-import at.fhv.solver.impl.tabu.INeighbourhood;
-import at.fhv.solver.impl.tabu.MachineSequences;
-import at.fhv.solver.impl.tabu.Move;
-import at.fhv.solver.impl.tabu.ScheduleEvaluator;
+import at.fhv.solver.impl.tabu.*;
 
 import java.util.ArrayList;
 import java.util.List;
 
 public class N5Neighbourhood implements INeighbourhood {
-
     @Override
     public List<Move> generate(ScheduleEvaluator.EvaluationResult evaluationResult, MachineSequences machineSequences) {
         List<Move> moves = new ArrayList<>();
-        List<List<Operation>> blocks = breakIntoBlocks(evaluationResult.criticalPath(), machineSequences);
+        List<List<Operation>> blocks = CriticalBlockFinder.of(evaluationResult.criticalPath(), machineSequences);
 
-        for (List<Operation> block : blocks) {
-            int n = block.size();
-            for (int i = 0; i + 1 < n; i++) {
-                moves.add(new Move(block.get(i), block.get(i + 1), block.get(i).machineId()));
-            }
-        }
+        for (int blockIndex = 0; blockIndex < blocks.size(); blockIndex++) {
+            List<Operation> block = blocks.get(blockIndex);
+            int size = block.size();
 
-        return moves;
-    }
+            boolean isFirstBlock = blockIndex == 0;
+            boolean isLastBlock = blockIndex == blocks.size() - 1;
 
-    private List<List<Operation>> breakIntoBlocks(List<Operation> criticalPath, MachineSequences sequences) {
-        List<List<Operation>> blocks = new ArrayList<>();
-        List<Operation> currentBlock = new ArrayList<>();
-
-        for (Operation operation : criticalPath) {
-            if (currentBlock.isEmpty()) {
-                currentBlock.add(operation);
+            if (size == 2) {
+                moves.add(swap(block, 0));
                 continue;
             }
 
-            Operation last = currentBlock.get(currentBlock.size() - 1);
-            boolean machineAdjacent = operation.equals(sequences.machineSuccessor(last));
-
-            if (machineAdjacent) {
-                currentBlock.add(operation);
-            } else {
-                if (currentBlock.size() >= 2) { blocks.add(currentBlock); }
-                currentBlock = new ArrayList<>();
-                currentBlock.add(operation);
+            if (!isFirstBlock) {
+                moves.add(swap(block, 0));
+            }
+            if (!isLastBlock) {
+                moves.add(swap(block, size - 2));
             }
         }
 
-        if (currentBlock.size() >= 2) { blocks.add(currentBlock); }
+        if (moves.isEmpty()) {
+            for (List<Operation> block : blocks) {
+                for (int i = 0; i + 1 < block.size(); i++) {
+                    moves.add(swap(block, i));
+                }
+            }
+        }
+        return moves;
+    }
 
-        return blocks;
+    private Move swap(List<Operation> block, int index) {
+        Operation left = block.get(index);
+        Operation right = block.get(index + 1);
+        return new Move(left, right, left.machineId());
     }
 }

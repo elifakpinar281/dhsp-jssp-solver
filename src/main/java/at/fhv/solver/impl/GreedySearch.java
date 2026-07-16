@@ -37,11 +37,11 @@ public class GreedySearch implements ISearchAlgorithm {
         Node initialNode = new Node(initialState, null, heuristicValue, null);
 
         PriorityQueue<Node> frontier = new PriorityQueue<>((n1, n2) -> {
-            int byDepth = Integer.compare(scheduledCount(n2.state()), scheduledCount(n1.state()));
-            if (byDepth != 0) {
-                return byDepth;
+            int byHeuristic = Double.compare(n1.heuristicValue(), n2.heuristicValue());
+            if (byHeuristic != 0) {
+                return byHeuristic;
             }
-            return Double.compare(n1.heuristicValue(), n2.heuristicValue());
+            return Integer.compare(scheduledCount(n2.state()), scheduledCount(n1.state()));
         });
 
         Set<State> reached = new HashSet<>();
@@ -51,6 +51,7 @@ public class GreedySearch implements ISearchAlgorithm {
         statistics.setTotalOperations(countTotalOperations(jsspProblem));
         long expanded = 0;
         int maxDepth = 0;
+        Node deepestNode = initialNode;
 
         while (!frontier.isEmpty()) {
             Node current = frontier.poll();
@@ -65,6 +66,9 @@ public class GreedySearch implements ISearchAlgorithm {
             if (depth > maxDepth) {
                 maxDepth = depth;
             }
+            if (depth > scheduledCount(deepestNode.state())) {
+                deepestNode = current;
+            }
 
             for (Node child : expand(current, jsspProblem)) {
                 State childState = child.state();
@@ -75,15 +79,30 @@ public class GreedySearch implements ISearchAlgorithm {
             }
             statistics.record(expanded, reached.size(), frontier.size(), maxDepth);
 
-            if (statistics.limitReached(expanded)) {
-                return null;
-            }
-            if (reached.size() >= maxNodes) {
+            if (statistics.limitReached(expanded) || reached.size() >= maxNodes) {
                 statistics.markStoppedByLimit();
-                return null;
+                return completeGreedily(deepestNode, jsspProblem);
             }
         }
         return null;
+    }
+
+    private Schedule completeGreedily(Node startNode, JsspProblem jsspProblem) {
+        Node current = startNode;
+
+        while (!jsspProblem.isGoal(current.state())) {
+            List<Node> children = expand(current, jsspProblem);
+            if (children.isEmpty()) { return null; }
+
+            Node best = children.get(0);
+            for (Node child : children) {
+                if (child.heuristicValue() < best.heuristicValue()) {
+                    best = child;
+                }
+            }
+            current = best;
+        }
+        return new Schedule(buildSchedule(current));
     }
 
     private State createInitialState(JsspProblem problem) {
