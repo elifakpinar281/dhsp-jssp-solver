@@ -8,6 +8,15 @@ import zipfile
 import openpyxl
 
 XLSX = sys.argv[1] if len(sys.argv) > 1 else "Demoanlage.xlsx"
+N_CARRIERS = int(sys.argv[2]) if len(sys.argv) > 2 else 10
+
+COL_BAD = 2
+COL_DESC = 3
+TYPE_MIN_COLS = [4, 6, 8, 10, 12]
+TYPE_MAX_COLS = [5, 7, 9, 11, 13]
+TYPE_COUNT = 5
+
+FALLBACK_PROPORTIONS = [0.4, 0.2, 0.1, 0.2, 0.1]
 
 
 def load_workbook_robust(path):
@@ -27,14 +36,6 @@ def load_workbook_robust(path):
         dst.close()
         buf.seek(0)
         return openpyxl.load_workbook(buf, data_only=True)
-
-COL_BAD = 2
-COL_DESC = 3
-TYPE_MIN_COLS = [4, 6, 8, 10, 12]
-TYPE_MAX_COLS = [5, 7, 9, 11, 13]
-PROPORTIONS = [0.4, 0.2, 0.1, 0.2, 0.1]
-
-N_CARRIERS = 10
 
 
 def load_rows():
@@ -64,6 +65,49 @@ def parse_max(v):
     return "inf"
 
 
+def find_proportions(rows):
+    for r in rows:
+        values = []
+        for c in TYPE_MIN_COLS:
+            v = r[c] if len(r) > c else None
+            if not is_number(v):
+                values = []
+                break
+            values.append(float(v))
+        if len(values) != TYPE_COUNT:
+            continue
+
+        total = sum(values)
+        if abs(total - 1.0) > 0.001:
+            continue
+
+        for v in values:
+            if v <= 0.0 or v >= 1.0:
+                values = []
+                break
+        if len(values) == TYPE_COUNT:
+            return values, True
+
+    return list(FALLBACK_PROPORTIONS), False
+
+
+def split_carriers(proportions, n_carriers):
+    counts = []
+    remainders = []
+    for t in range(TYPE_COUNT):
+        exact = proportions[t] * n_carriers
+        base = int(exact)
+        counts.append(base)
+        remainders.append((exact - base, t))
+
+    missing = n_carriers - sum(counts)
+    remainders.sort(key=lambda pair: pair[0], reverse=True)
+    for i in range(missing):
+        t = remainders[i % TYPE_COUNT][1]
+        counts[t] = counts[t] + 1
+    return counts
+
+
 def build_task_rows(rows):
     task_rows = []
     for r in rows:
@@ -88,6 +132,7 @@ def build_task_rows(rows):
 
 def main():
     rows = load_rows()
+    proportions, from_excel = find_proportions(rows)
     task_rows = build_task_rows(rows)
 
     machine_id = {}
@@ -101,9 +146,9 @@ def main():
             machine_name[idx] = f"{bad} {desc}"
             capacities.append(bath_count(bad))
 
-    jobtype_ops = {t: [] for t in range(5)}
+    jobtype_ops = {t: [] for t in range(TYPE_COUNT)}
     for bad, desc, mins, maxs in task_rows:
-        for t in range(5):
+        for t in range(TYPE_COUNT):
             m = mins[t]
             if m is None:
                 continue
@@ -111,13 +156,11 @@ def main():
                 continue
             jobtype_ops[t].append((machine_id[bad], int(m), maxs[t]))
 
-    counts = [round(p * N_CARRIERS) for p in PROPORTIONS]
-    diff = N_CARRIERS - sum(counts)
-    counts[0] += diff
+    counts = split_carriers(proportions, N_CARRIERS)
 
     jobs = []
-    for t, cnt in enumerate(counts):
-        for _ in range(cnt):
+    for t in range(TYPE_COUNT):
+        for _ in range(counts[t]):
             jobs.append((t, list(jobtype_ops[t])))
 
     machine_count = len(machine_id)
@@ -140,7 +183,9 @@ def main():
     mapping = {
         "instance": "Demoanlage (IM1)",
         "nCarriers": N_CARRIERS,
-        "jobtypeCounts": {f"Typ{t+1}": counts[t] for t in range(5)},
+        "jobtypeProportions": {f"Typ{t+1}": proportions[t] for t in range(TYPE_COUNT)},
+        "proportionsSource": "Fahrplanmix" if from_excel else "fallback",
+        "jobtypeCounts": {f"Typ{t+1}": counts[t] for t in range(TYPE_COUNT)},
         "jobtypeNames": {
             "Typ1": "Cu + ChemNi + Tef",
             "Typ2": "ChemNi + Tef",
@@ -158,14 +203,16 @@ def main():
     with open("demoanlage_mapping.json", "w") as f:
         json.dump(mapping, f, indent=2, ensure_ascii=False)
 
-    print(f"Task-Zeilen (angefahrene Baeder):     {len(task_rows)}")
-    print(f"Distinkte Maschinen (Bad-Zeilen):     {machine_count}")
-    print(f"Baeder gesamt (Summe Kapazitaeten):    {sum(capacities)}")
-    print(f"Carrier gesamt:                       {len(jobs)}  -> {counts} (Typ1..5)")
+    source = "read from Fahrplanmix" if from_excel else "FALLBACK (percentage row not found in workbook!)"
+    print(f"Share per job type ({source}): {proportions}")
+    print(f"Task rows (baths visited): {len(task_rows)}")
+    print(f"Distinct machines (bath rows): {machine_count}")
+    print(f"Baths total (sum of capacities): {sum(capacities)}")
+    print(f"Carriers total:  {len(jobs)}  -> {counts} (type 1..5)")
     total_ops = sum(len(ops) for _, ops in jobs)
-    print(f"Operationen gesamt:                   {total_ops}")
-    print("Ops je Jobtyp:", {f'Typ{t+1}': len(jobtype_ops[t]) for t in range(5)})
-    print("-> demoanlage.txt, demoanlage_mapping.json geschrieben")
+    print(f"Operations total: {total_ops}")
+    print("Ops per job type:", {f"Typ{t+1}": len(jobtype_ops[t]) for t in range(TYPE_COUNT)})
+    print("-> wrote demoanlage.txt, demoanlage_mapping.json")
 
 
 if __name__ == "__main__":
