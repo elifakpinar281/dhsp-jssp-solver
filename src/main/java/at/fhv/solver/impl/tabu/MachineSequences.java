@@ -17,18 +17,10 @@ import java.util.Map;
 public class MachineSequences {
     private final Map<Integer, List<Operation>> orderPerMachine;
     private final Map<Integer, Integer> capacities;
-    private final Map<Operation, Integer> position;
 
     public MachineSequences(Map<Integer, List<Operation>> orderPerMachine, Map<Integer, Integer> capacities) {
         this.orderPerMachine = orderPerMachine;
         this.capacities = capacities;
-        this.position = new HashMap<>();
-
-        for (List<Operation> operations : orderPerMachine.values()) {
-            for (int i = 0; i < operations.size(); i++) {
-                position.put(operations.get(i), i);
-            }
-        }
     }
 
     public static MachineSequences fromSchedule(JsspProblem jsspProblem, Schedule schedule) {
@@ -82,11 +74,22 @@ public class MachineSequences {
         return capacity == null ? 1 : capacity;
     }
 
-    public Operation machinePredecessor(Operation operation) {
-        if (operation == null) { return null; }
+    public int positionOf(Operation operation) {
+        if (operation == null) { return -1; }
+        List<Operation> operations = orderPerMachine.get(operation.machineId());
+        if (operations == null) { return -1; }
+        return operations.indexOf(operation);
+    }
 
-        Integer i = position.get(operation);
-        if (i == null) { return null; }
+    public Operation at(int machineId, int index) {
+        List<Operation> operations = orderPerMachine.get(machineId);
+        if (operations == null || index < 0 || index >= operations.size()) { return null; }
+        return operations.get(index);
+    }
+
+    public Operation machinePredecessor(Operation operation) {
+        int i = positionOf(operation);
+        if (i < 0) { return null; }
 
         int stride = capacityOf(operation.machineId());
         if (i - stride < 0) { return null; }
@@ -95,10 +98,8 @@ public class MachineSequences {
     }
 
     public Operation machineSuccessor(Operation operation) {
-        if (operation == null) { return null; }
-
-        Integer i = position.get(operation);
-        if (i == null) { return null; }
+        int i = positionOf(operation);
+        if (i < 0) { return null; }
 
         List<Operation> operations = orderPerMachine.get(operation.machineId());
         int stride = capacityOf(operation.machineId());
@@ -108,19 +109,19 @@ public class MachineSequences {
     }
 
     public MachineSequences applied(Move move) {
-        Map<Integer, List<Operation>> newOrderPerMachine = deepCopyOrder();
-        List<Operation> operations = newOrderPerMachine.get(move.machineId());
-
-        if (operations == null) {
+        List<Operation> source = orderPerMachine.get(move.machineId());
+        if (source == null) {
             throw new IllegalArgumentException("Unknown machine in move: " + move.machineId());
         }
 
-        Integer indexA = position.get(move.operationA());
-        Integer indexB = position.get(move.operationB());
+        int indexA = source.indexOf(move.operationA());
+        int indexB = source.indexOf(move.operationB());
 
-        if (indexA == null || indexB == null || indexA.equals(indexB)) {
+        if (indexA < 0 || indexB < 0 || indexA == indexB) {
             throw new IllegalArgumentException("Invalid move: " + move.operationA() + " <-> " + move.operationB());
         }
+
+        List<Operation> operations = new ArrayList<>(source);
 
         switch (move.type()) {
             case SWAP:
@@ -137,6 +138,9 @@ public class MachineSequences {
             default:
                 throw new IllegalArgumentException("Unknown move type: " + move.type());
         }
+
+        Map<Integer, List<Operation>> newOrderPerMachine = new HashMap<>(orderPerMachine);
+        newOrderPerMachine.put(move.machineId(), operations);
 
         return new MachineSequences(newOrderPerMachine, capacities);
     }

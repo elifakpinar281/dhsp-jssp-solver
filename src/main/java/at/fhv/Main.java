@@ -16,10 +16,7 @@ import at.fhv.solver.impl.decoder.DwellStartDecoder;
 import at.fhv.solver.impl.decoder.StartDecoder;
 import at.fhv.solver.impl.tabu.INeighbourhood;
 import at.fhv.solver.impl.tabu.ScheduleEvaluator;
-import at.fhv.solver.impl.tabu.impl.AdjacentSwapNeighbourhood;
-import at.fhv.solver.impl.tabu.impl.N1Neighbourhood;
-import at.fhv.solver.impl.tabu.impl.N5Neighbourhood;
-import at.fhv.solver.impl.tabu.impl.N6Neighbourhood;
+import at.fhv.solver.impl.tabu.impl.*;
 import at.fhv.solver.validation.MemorySampler;
 import at.fhv.solver.validation.ScheduleValidator;
 import at.fhv.solver.validation.ValidationResult;
@@ -48,6 +45,7 @@ public class Main {
     private static final long GREEDY_MAX_EXPANSIONS = 1_000_000;
     private static final int GREEDY_MAX_NODES = 1_500_000;
     private static final int WARM_START_BEAM_WIDTH = 100;
+    private static final int TABU_MAX_RESTARTS = 100;
     private static final DateTimeFormatter STAMP = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss");
 
     public static void main(String[] args) throws IOException {
@@ -69,7 +67,9 @@ public class Main {
     private static void printUsage() {
         System.out.println("Commands:");
         System.out.println("  run  [--algo GREEDY|BEAM|TABU] [--instance <path>] [--beam <k>]");
-        System.out.println("  [--tenure <n>] [--noimp <n>] [--seed <n>] [--nb AUTO|N1|N5|N6|ADJ]");
+        System.out.println("  [--tenure <n>] [--noimp <n>] [--seed <n>] [--nb AUTO|N1|N5|N6|ADJ|STRIDE]");
+        System.out.println("  [--time <ms>] wall clock budget per TABU run, 0 = use --noimp only");
+        System.out.println("  [--kick <n>] non improving iterations before perturbing, default 2");
         System.out.println("  [--start COLD|WARM] [--out <folder>]");
         System.out.println("  Lists (1,5,20) and ranges (1-20) are allowed.");
         System.out.println("  charts  PNG charts from docs/assets/**/*-samples.csv");
@@ -89,6 +89,8 @@ public class Main {
         List<String> seeds = options(args, "--seed", "42");
         List<String> neighbourhoods = options(args, "--nb", "AUTO");
         List<String> starts = options(args, "--start", "COLD");
+        List<String> timeBudgets = options(args, "--time", "0");
+        List<String> kicks = options(args, "--kick", "2");
         Path outFolder = Path.of(option(args, "--out", "runs"));
         RunLogWriter writer = new RunLogWriter(outFolder);
 
@@ -101,7 +103,7 @@ public class Main {
             System.out.println("== " + instance + " (" + problem.getJobs().size() + " jobs, " + problem.getMachines().size() + " machines) ==");
 
             for (String algorithm : algorithms) {
-                for (Map<String, Object> params : parameterSets(algorithm, beamWidths, tenures, noImprovements, seeds, neighbourhoods, starts)) {
+                for (Map<String, Object> params : parameterSets(algorithm, beamWidths, tenures, noImprovements, seeds, neighbourhoods, starts, timeBudgets, kicks)) {
                     boolean[] stoppedByLimit = new boolean[1];
                     RunLog log = solveOnce(instance, problem, algorithm.toUpperCase(), params, outFolder, stoppedByLimit);
                     writer.write(log);
@@ -128,7 +130,7 @@ public class Main {
         }
     }
 
-    private static List<Map<String, Object>> parameterSets(String algorithm, List<String> beamWidths, List<String> tenures, List<String> noImprovements, List<String> seeds, List<String> neighbourhoods, List<String> starts) {
+    private static List<Map<String, Object>> parameterSets(String algorithm, List<String> beamWidths, List<String> tenures, List<String> noImprovements, List<String> seeds, List<String> neighbourhoods, List<String> starts, List<String> timeBudgets, List<String> kicks) {
         List<Map<String, Object>> sets = new ArrayList<>();
         String algo = algorithm.toUpperCase();
 
@@ -149,14 +151,21 @@ public class Main {
                 for (String neighbourhood : neighbourhoods) {
                     for (String tenure : tenures) {
                         for (String noImprove : noImprovements) {
-                            for (String seed : seeds) {
-                                Map<String, Object> params = new LinkedHashMap<>();
-                                params.put("start", start.toUpperCase());
-                                params.put("nb", neighbourhood.toUpperCase());
-                                params.put("tenure", Integer.parseInt(tenure));
-                                params.put("noImprove", Integer.parseInt(noImprove));
-                                params.put("seed", Long.parseLong(seed));
-                                sets.add(params);
+                            for (String time : timeBudgets) {
+                                for (String kick : kicks) {
+                                    for (String seed : seeds) {
+                                        Map<String, Object> params = new LinkedHashMap<>();
+                                        params.put("start", start.toUpperCase());
+                                        params.put("nb", neighbourhood.toUpperCase());
+                                        params.put("tenure", Integer.parseInt(tenure));
+                                        params.put("noImprove", Integer.parseInt(noImprove));
+                                        long timeBudget = Long.parseLong(time);
+                                        if (timeBudget > 0) { params.put("timeMs", timeBudget); }
+                                        params.put("kick", Integer.parseInt(kick));
+                                        params.put("seed", Long.parseLong(seed));
+                                        sets.add(params);
+                                    }
+                                }
                             }
                         }
                     }
@@ -225,13 +234,18 @@ public class Main {
                 INeighbourhood neighbourhood = buildNeighbourhood((String) params.get("nb"), problem);
                 IStartDecoder decoder = buildStartDecoder((String) params.get("start"), problem, heuristic, seed);
 
+                Long timeBudget = (Long) params.get("timeMs");
+
                 TabuSearch tabuSearch = new TabuSearch(
                         evaluator,
                         neighbourhood,
                         (Integer) params.get("tenure"),
                         (Integer) params.get("noImprove"),
                         decoder,
-                        seed
+                        seed,
+                        TABU_MAX_RESTARTS,
+                        timeBudget == null ? 0L : timeBudget,
+                        (Integer) params.get("kick")
                 ).withVerbose(false);
                 tabuRef[0] = tabuSearch;
                 return tabuSearch;
@@ -258,7 +272,7 @@ public class Main {
     private static INeighbourhood buildNeighbourhood(String name, JsspProblem problem) {
         String selected = name == null ? "AUTO" : name.toUpperCase();
         if (selected.equals("AUTO")) {
-            selected = problem.isBlocking() ? "ADJ" : "N5";
+            selected = problem.isBlocking() ? "STRIDE" : "N5";
         }
 
         switch (selected) {
@@ -270,6 +284,8 @@ public class Main {
                 return new N6Neighbourhood();
             case "ADJ":
                 return new AdjacentSwapNeighbourhood();
+            case "STRIDE":
+                return new StrideNeighbourhood();
             default:
                 throw new IllegalArgumentException("Unknown neighbourhood: " + name);
         }

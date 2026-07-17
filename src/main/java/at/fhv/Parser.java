@@ -172,7 +172,10 @@ public class Parser {
         }
         try {
             int value = Integer.parseInt(token);
-            return value < 0 ? Operation.NO_LIMIT : value;
+            if (value < 0) {
+                throw new InvalidInstanceException("Expected a non negative integer or 'inf' for " + field + " but got '" + token + "'");
+            }
+            return value;
         } catch (NumberFormatException e) {
             throw new InvalidInstanceException("Expected integer or 'inf' for " + field + " but got '" + token + "'");
         }

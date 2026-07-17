@@ -12,13 +12,23 @@ public class ScheduleEvaluator {
     private final Map<Operation, Integer> indexOf;
     private final int operationCount;
 
+    private final int[] jobOffset;
+    private final boolean fastIndexUsable;
+    private static final int DEFAULT_RELAXATION_BUDGET_FACTOR = 16;
+    private final int relaxationBudgetFactor;
+
     private final int[] processingTime;
     private final int[] maxDwellTime;
     private final int[] jobPredecessor;
     private final int[] jobSuccessor;
 
     public ScheduleEvaluator(JsspProblem jsspProblem) {
+        this(jsspProblem, DEFAULT_RELAXATION_BUDGET_FACTOR);
+    }
+
+    public ScheduleEvaluator(JsspProblem jsspProblem, int relaxationBudgetFactor) {
         this.jsspProblem = jsspProblem;
+        this.relaxationBudgetFactor = relaxationBudgetFactor;
 
         this.operations = new ArrayList<>();
         for (Job job : jsspProblem.getJobs()) {
@@ -38,6 +48,19 @@ public class ScheduleEvaluator {
         Arrays.fill(jobPredecessor, NONE);
         Arrays.fill(jobSuccessor, NONE);
 
+        this.jobOffset = new int[jsspProblem.getJobs().size()];
+        boolean usable = true;
+        int offset = 0;
+        for (Job job : jsspProblem.getJobs()) {
+            if (job.jobId() < 0 || job.jobId() >= jobOffset.length) { usable = false; break; }
+            jobOffset[job.jobId()] = offset;
+            for (int i = 0; i < job.operations().size(); i++) {
+                if (job.operations().get(i).operationId() != i) { usable = false; }
+            }
+            offset = offset + job.operations().size();
+        }
+        this.fastIndexUsable = usable;
+
         for (Job job : jsspProblem.getJobs()) {
             List<Operation> jobOperations = job.operations();
             for (int i = 0; i < jobOperations.size(); i++) {
@@ -54,8 +77,7 @@ public class ScheduleEvaluator {
             int makespan,
             boolean valid,
             List<Operation> criticalPath,
-            Map<Operation, Integer> head,
-            Map<Operation, Integer> tail
+            Map<Operation, Integer> head
     ) {
         public boolean dwellValid() { return valid; }
     }
@@ -81,7 +103,7 @@ public class ScheduleEvaluator {
 
     public EvaluationResult evaluate(MachineSequences sequences) {
         if (operationCount == 0) {
-            return new EvaluationResult(0, true, new ArrayList<>(), new HashMap<>(), new HashMap<>());
+            return new EvaluationResult(0, true, new ArrayList<>(), new HashMap<>());
         }
 
         int[] machinePredecessor = new int[operationCount];
@@ -91,7 +113,7 @@ public class ScheduleEvaluator {
         int[] start = solveWithLags(machinePredecessor, machineSuccessor);
 
         if (start == null) {
-            return new EvaluationResult(Integer.MAX_VALUE, false, new ArrayList<>(), new HashMap<>(), new HashMap<>());
+            return new EvaluationResult(Integer.MAX_VALUE, false, new ArrayList<>(), new HashMap<>());
         }
 
         int makespan = 0;
@@ -99,9 +121,76 @@ public class ScheduleEvaluator {
             makespan = Math.max(makespan, start[i] + processingTime[i]);
         }
 
-        int[] tail = computeTail(machinePredecessor, machineSuccessor);
         List<Operation> criticalPath = criticalPath(start, machinePredecessor, machineSuccessor, makespan);
-        return new EvaluationResult(makespan, true, criticalPath, toMap(start), toMap(tail));
+        return new EvaluationResult(makespan, true, criticalPath, toMap(start));
+    }
+
+    public Map<Operation, Integer> slack(MachineSequences sequences) {
+        Map<Operation, Integer> result = new HashMap<>();
+        if (operationCount == 0) { return result; }
+
+        int[] machinePredecessor = new int[operationCount];
+        int[] machineSuccessor = new int[operationCount];
+        buildLinks(sequences, machinePredecessor, machineSuccessor);
+
+        int[] start = solveWithLags(machinePredecessor, machineSuccessor);
+        if (start == null) { return result; }
+
+        int makespan = 0;
+        for (int i = 0; i < operationCount; i++) {
+            makespan = Math.max(makespan, start[i] + processingTime[i]);
+        }
+
+        List<int[]> arcs = buildArcs(machineSuccessor);
+
+        int[] latest = new int[operationCount];
+        for (int i = 0; i < operationCount; i++) {
+            latest[i] = makespan - processingTime[i];
+        }
+
+        for (int round = 0; round <= operationCount; round++) {
+            boolean changed = false;
+            for (int[] arc : arcs) {
+                int candidate = latest[arc[1]] - arc[2];
+                if (candidate < latest[arc[0]]) {
+                    latest[arc[0]] = candidate;
+                    changed = true;
+                }
+            }
+            if (!changed) { break; }
+        }
+
+        for (int i = 0; i < operationCount; i++) {
+            result.put(operations.get(i), latest[i] - start[i]);
+        }
+        return result;
+    }
+
+    private List<int[]> buildArcs(int[] machineSuccessor) {
+        List<int[]> arcs = new ArrayList<>();
+
+        for (int current = 0; current < operationCount; current++) {
+            if (jobSuccessor[current] != NONE) {
+                arcs.add(new int[]{current, jobSuccessor[current], processingTime[current]});
+            }
+            if (machineSuccessor[current] != NONE) {
+                arcs.add(new int[]{current, machineSuccessor[current], processingTime[current]});
+            }
+
+            int predecessor = jobPredecessor[current];
+            if (predecessor != NONE && maxDwellTime[predecessor] != Operation.NO_LIMIT) {
+                arcs.add(new int[]{current, predecessor, -maxDwellTime[predecessor]});
+            }
+            if (jsspProblem.isBlocking() && predecessor != NONE && machineSuccessor[predecessor] != NONE) {
+                arcs.add(new int[]{current, machineSuccessor[predecessor], 0});
+            }
+        }
+        return arcs;
+    }
+
+    private int index(Operation operation) {
+        if (fastIndexUsable) { return jobOffset[operation.jobId()] + operation.operationId(); }
+        return indexOf.get(operation);
     }
 
     private void buildLinks(MachineSequences sequences, int[] machinePredecessor, int[] machineSuccessor) {
@@ -113,9 +202,9 @@ public class ScheduleEvaluator {
             int stride = jsspProblem.capacityOf(entry.getKey());
 
             for (int i = 0; i < machineOperations.size(); i++) {
-                int index = indexOf.get(machineOperations.get(i));
-                if (i - stride >= 0) { machinePredecessor[index] = indexOf.get(machineOperations.get(i - stride)); }
-                if (i + stride < machineOperations.size()) { machineSuccessor[index] = indexOf.get(machineOperations.get(i + stride)); }
+                int index = index(machineOperations.get(i));
+                if (i - stride >= 0) { machinePredecessor[index] = index(machineOperations.get(i - stride)); }
+                if (i + stride < machineOperations.size()) { machineSuccessor[index] = index(machineOperations.get(i + stride)); }
             }
         }
     }
@@ -125,6 +214,9 @@ public class ScheduleEvaluator {
         int[] start = new int[n];
         int[] relaxCount = new int[n];
         boolean[] inQueue = new boolean[n];
+
+        long relaxations = 0;
+        long relaxationBudget = (long) relaxationBudgetFactor * n;
 
         int[] queue = new int[n + 1];
         int queueHead = 0;
@@ -181,7 +273,10 @@ public class ScheduleEvaluator {
 
                 start[target] = candidate;
                 relaxCount[target]++;
+                relaxations++;
+
                 if (relaxCount[target] > n) { return null; }
+                if (relaxations > relaxationBudget) { return null; }
 
                 if (!inQueue[target]) {
                     queue[queueTail] = target;
@@ -192,62 +287,6 @@ public class ScheduleEvaluator {
             }
         }
         return start;
-    }
-
-    private int[] computeTail(int[] machinePredecessor, int[] machineSuccessor) {
-        int[] tail = new int[operationCount];
-        int[] order = topologicalOrder(machinePredecessor, machineSuccessor);
-
-        for (int i = order.length - 1; i >= 0; i--) {
-            int index = order[i];
-            int jobTail = 0;
-            int machineTail = 0;
-
-            int successor = jobSuccessor[index];
-            if (successor != NONE) { jobTail = tail[successor] + processingTime[successor]; }
-
-            int machine = machineSuccessor[index];
-            if (machine != NONE) { machineTail = tail[machine] + processingTime[machine]; }
-
-            tail[index] = Math.max(jobTail, machineTail);
-        }
-        return tail;
-    }
-
-    private int[] topologicalOrder(int[] machinePredecessor, int[] machineSuccessor) {
-        int n = operationCount;
-        int[] inDegree = new int[n];
-
-        for (int i = 0; i < n; i++) {
-            int degree = 0;
-            if (jobPredecessor[i] != NONE) { degree++; }
-            if (machinePredecessor[i] != NONE) { degree++; }
-            inDegree[i] = degree;
-        }
-
-        int[] queue = new int[n];
-        int queueTail = 0;
-        for (int i = 0; i < n; i++) {
-            if (inDegree[i] == 0) { queue[queueTail++] = i; }
-        }
-
-        int[] result = new int[n];
-        int resultSize = 0;
-        int queueHead = 0;
-
-        while (queueHead < queueTail) {
-            int current = queue[queueHead++];
-            result[resultSize++] = current;
-
-            int successor = jobSuccessor[current];
-            if (successor != NONE && --inDegree[successor] == 0) { queue[queueTail++] = successor; }
-
-            int machine = machineSuccessor[current];
-            if (machine != NONE && --inDegree[machine] == 0) { queue[queueTail++] = machine; }
-        }
-
-        if (resultSize != n) { throw new IllegalStateException("Cycle detected"); }
-        return result;
     }
 
     private List<Operation> criticalPath(int[] start, int[] machinePredecessor, int[] machineSuccessor, int makespan) {
