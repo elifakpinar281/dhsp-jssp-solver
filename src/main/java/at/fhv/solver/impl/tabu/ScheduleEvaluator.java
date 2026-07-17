@@ -14,21 +14,13 @@ public class ScheduleEvaluator {
 
     private final int[] jobOffset;
     private final boolean fastIndexUsable;
-    private static final int DEFAULT_RELAXATION_BUDGET_FACTOR = 16;
-    private final int relaxationBudgetFactor;
-
     private final int[] processingTime;
     private final int[] maxDwellTime;
     private final int[] jobPredecessor;
     private final int[] jobSuccessor;
 
     public ScheduleEvaluator(JsspProblem jsspProblem) {
-        this(jsspProblem, DEFAULT_RELAXATION_BUDGET_FACTOR);
-    }
-
-    public ScheduleEvaluator(JsspProblem jsspProblem, int relaxationBudgetFactor) {
         this.jsspProblem = jsspProblem;
-        this.relaxationBudgetFactor = relaxationBudgetFactor;
 
         this.operations = new ArrayList<>();
         for (Job job : jsspProblem.getJobs()) {
@@ -212,11 +204,8 @@ public class ScheduleEvaluator {
     private int[] solveWithLags(int[] machinePredecessor, int[] machineSuccessor) {
         int n = operationCount;
         int[] start = new int[n];
-        int[] relaxCount = new int[n];
+        int[] pathEdges = new int[n];
         boolean[] inQueue = new boolean[n];
-
-        long relaxations = 0;
-        long relaxationBudget = (long) relaxationBudgetFactor * n;
 
         int[] queue = new int[n + 1];
         int queueHead = 0;
@@ -272,11 +261,8 @@ public class ScheduleEvaluator {
                 if (candidate <= start[target]) { continue; }
 
                 start[target] = candidate;
-                relaxCount[target]++;
-                relaxations++;
-
-                if (relaxCount[target] > n) { return null; }
-                if (relaxations > relaxationBudget) { return null; }
+                pathEdges[target] = pathEdges[current] + 1;
+                if (pathEdges[target] >= n) { return null; }
 
                 if (!inQueue[target]) {
                     queue[queueTail] = target;
@@ -369,7 +355,6 @@ public class ScheduleEvaluator {
                 scheduledOperations.add(new ScheduledOperation(operation.jobId(), operation.machineId(), start, end));
             }
         }
-
         return new Schedule(scheduledOperations);
     }
 }

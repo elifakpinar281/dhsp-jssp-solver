@@ -155,10 +155,6 @@ public class MachineSequences {
         operations.add(target, moved);
     }
 
-    @Deprecated
-    public MachineSequences swapped(Move move) {
-        return applied(move);
-    }
 
     public MachineSequences copy() {
         return new MachineSequences(deepCopyOrder(), capacities);

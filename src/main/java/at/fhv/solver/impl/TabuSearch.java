@@ -19,7 +19,7 @@ public class TabuSearch implements ISearchAlgorithm {
     private static final int KICK_STRENGTH = 6;
     private static final int KICK_ATTEMPTS = 15;
     private static final int FULL_RESTART_EVERY = 4;
-    private static final int MAX_NEIGHBOURS_EVALUATED = 30;
+    private static final int DEFAULT_MAX_NEIGHBOURS = 0;
     private static final int MAX_HISTORY = 50_000;
 
     public record IterationSnapshot(
@@ -33,11 +33,13 @@ public class TabuSearch implements ISearchAlgorithm {
     private final int tenure;
     private final int maxIterationsWithoutImprovement;
     private final IStartDecoder startDecoder;
+    private final long seed;
     private final Random random;
     private final int maxRestarts;
     private final int kickThreshold;
     private final long timeBudgetMs;
 
+    private int maxNeighbours = DEFAULT_MAX_NEIGHBOURS;
     private boolean verbose = true;
     private final List<IterationSnapshot> history = new ArrayList<>();
 
@@ -63,6 +65,7 @@ public class TabuSearch implements ISearchAlgorithm {
         this.tenure = tenure;
         this.maxIterationsWithoutImprovement = maxIterationsWithoutImprovement;
         this.startDecoder = startDecoder;
+        this.seed = seed;
         this.random = new Random(seed);
         this.maxRestarts = maxRestarts;
         this.kickThreshold = Math.max(1, kickThreshold);
@@ -71,6 +74,11 @@ public class TabuSearch implements ISearchAlgorithm {
 
     public TabuSearch withVerbose(boolean verbose) {
         this.verbose = verbose;
+        return this;
+    }
+
+    public TabuSearch withMaxNeighbours(int maxNeighbours) {
+        this.maxNeighbours = Math.max(0, maxNeighbours);
         return this;
     }
 
@@ -92,6 +100,7 @@ public class TabuSearch implements ISearchAlgorithm {
     @Override
     public Schedule solve(JsspProblem problem) {
         history.clear();
+        random.setSeed(seed);
 
         SearchState s = new SearchState();
         s.current = startDecoder.decode(problem);
@@ -120,6 +129,7 @@ public class TabuSearch implements ISearchAlgorithm {
         if (s.best == null) { return null; }
 
         ScheduleEvaluator.EvaluationResult result = scheduleEvaluator.evaluate(s.best);
+        if (!result.valid()) { return null; }
         return scheduleEvaluator.toSchedule(result);
     }
 
@@ -137,24 +147,34 @@ public class TabuSearch implements ISearchAlgorithm {
             return;
         }
 
-        if (neighbours.size() > MAX_NEIGHBOURS_EVALUATED) {
+        if (maxNeighbours > 0 && neighbours.size() > maxNeighbours) {
             neighbours = new ArrayList<>(neighbours);
             Collections.shuffle(neighbours, random);
-            neighbours = neighbours.subList(0, MAX_NEIGHBOURS_EVALUATED);
+            neighbours = neighbours.subList(0, maxNeighbours);
         }
 
-        List<Move> feasibleMoves = new ArrayList<>();
         List<Move> bestCandidates = new ArrayList<>();
         int bestCandidateMakespan = Integer.MAX_VALUE;
+        List<Move> bestFeasible = new ArrayList<>();
+        int bestFeasibleMakespan = Integer.MAX_VALUE;
+
+        boolean anyFeasible = false;
 
         for (Move move : neighbours) {
             ScheduleEvaluator.Result result = scheduleEvaluator.evaluateResult(s.current.applied(move));
             if (!result.valid()) { continue; }
-            feasibleMoves.add(move);
+            anyFeasible = true;
+
+            if (result.makespan() < bestFeasibleMakespan) {
+                bestFeasibleMakespan = result.makespan();
+                bestFeasible.clear();
+                bestFeasible.add(move);
+            } else if (result.makespan() == bestFeasibleMakespan) {
+                bestFeasible.add(move);
+            }
 
             boolean tabuMove = s.tabu.isTabu(move.getAttribute(), iteration);
             boolean aspiration = result.makespan() < s.bestMakespan;
-
             if (tabuMove && !aspiration) { continue; }
 
             if (result.makespan() < bestCandidateMakespan) {
@@ -166,12 +186,14 @@ public class TabuSearch implements ISearchAlgorithm {
             }
         }
 
-        if (feasibleMoves.isEmpty()) {
+        if (!anyFeasible) {
             s.noImprovement++;
             return;
         }
 
-        Move chosenMove = bestCandidates.isEmpty() ? feasibleMoves.get(random.nextInt(feasibleMoves.size())) : leastUsed(bestCandidates, s.frequency);
+        List<Move> pool = bestCandidates.isEmpty() ? bestFeasible : bestCandidates;
+        Move chosenMove = leastUsed(pool, s.frequency);
+
         s.current = s.current.applied(chosenMove);
         s.currentResult = scheduleEvaluator.evaluate(s.current);
         s.tabu.setTabu(chosenMove.getAttribute(), iteration + dynamicTenure());
@@ -215,7 +237,7 @@ public class TabuSearch implements ISearchAlgorithm {
     }
 
     private boolean remember(SearchState s) {
-        if (!s.currentResult.dwellValid()) { return false; }
+        if (!s.currentResult.valid()) { return false; }
         if (s.currentResult.makespan() >= s.bestMakespan) { return false; }
 
         s.best = s.current.copy();
@@ -228,8 +250,9 @@ public class TabuSearch implements ISearchAlgorithm {
         s.restarts++;
         boolean fullRestart = s.best == null || s.restarts % FULL_RESTART_EVERY == 0;
 
-        if (fullRestart) { s.current = startDecoder.decode(problem);}
-        else {
+        if (fullRestart) {
+            s.current = startDecoder.decode(problem);
+        } else {
             s.current = s.best.copy();
             kick(s);
         }
