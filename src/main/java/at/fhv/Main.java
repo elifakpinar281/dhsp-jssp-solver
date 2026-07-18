@@ -1,7 +1,11 @@
 package at.fhv;
 
 import at.fhv.evaluation.IHeuristic;
+import at.fhv.evaluation.Slack;
+import at.fhv.evaluation.implementation.CombineHeuristics;
 import at.fhv.evaluation.implementation.MakespanEstimateHeuristic;
+import at.fhv.evaluation.implementation.NextTStartHeuristic;
+import at.fhv.evaluation.implementation.NextTMaxHeuristic;
 import at.fhv.experiment.RunLog;
 import at.fhv.experiment.RunLogWriter;
 import at.fhv.model.exception.SolveFailedException;
@@ -36,11 +40,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Random;
 
-//.\gradlew.bat run --args="<command> [options]
-//.\gradlew.bat run --args="run --algo TABU --instance benchmarks/demoanlage.txt --seed 1-20"
-//.\gradlew.bat run --args="run --algo BEAM --instance benchmarks/demoanlage.txt --beam 1,5,20,50,100"
-//.\gradlew.bat run --args="run --algo GREEDY,BEAM,TABU --instance benchmarks/ft06.txt,benchmarks/demoanlage.txt"
-
 public class Main {
     private static final long GREEDY_MAX_EXPANSIONS = 1_000_000;
     private static final int GREEDY_MAX_NODES = 1_500_000;
@@ -71,13 +70,14 @@ public class Main {
         System.out.println("  [--time <ms>] wall clock budget per TABU run, 0 = use --noimp only");
         System.out.println("  [--kick <n>] non improving iterations before perturbing, default 2");
         System.out.println("  [--start COLD|WARM] [--out <folder>]");
+        System.out.println("  [--heuristic MAKESPAN|NEXT-T-START|NEXT-T-MAX|COMBINED] one or a list");
         System.out.println("  Lists (1,5,20) and ranges (1-20) are allowed.");
         System.out.println("  charts  PNG charts from docs/assets/**/*-samples.csv");
         System.out.println();
         System.out.println("Examples:");
         System.out.println(" run --algo TABU --instance benchmarks/ft06.txt --seed 1-20");
         System.out.println("  run --algo BEAM --instance benchmarks/ft06.txt --beam 1,5,20,50,100");
-        System.out.println("  run --algo GREEDY,BEAM,TABU --instance benchmarks/ft06.txt,benchmarks/la02.txt");
+        System.out.println("  run --algo BEAM --instance benchmarks/demoanlage.txt --heuristic MAKESPAN,NEXT-T-START,NEXT-T-MAX,COMBINED");
     }
 
     private static void runAll(String[] args) throws IOException {
@@ -91,6 +91,7 @@ public class Main {
         List<String> starts = options(args, "--start", "COLD");
         List<String> timeBudgets = options(args, "--time", "0");
         List<String> kicks = options(args, "--kick", "2");
+        List<String> heuristics = options(args, "--heuristic", "MAKESPAN");
         Path outFolder = Path.of(option(args, "--out", "runs"));
         RunLogWriter writer = new RunLogWriter(outFolder);
 
@@ -103,7 +104,7 @@ public class Main {
             System.out.println("== " + instance + " (" + problem.getJobs().size() + " jobs, " + problem.getMachines().size() + " machines) ==");
 
             for (String algorithm : algorithms) {
-                for (Map<String, Object> params : parameterSets(algorithm, beamWidths, tenures, noImprovements, seeds, neighbourhoods, starts, timeBudgets, kicks)) {
+                for (Map<String, Object> params : parameterSets(algorithm, beamWidths, tenures, noImprovements, seeds, neighbourhoods, starts, timeBudgets, kicks, heuristics)) {
                     boolean[] stoppedByLimit = new boolean[1];
                     RunLog log = solveOnce(instance, problem, algorithm.toUpperCase(), params, outFolder, stoppedByLimit);
                     writer.write(log);
@@ -130,54 +131,59 @@ public class Main {
         }
     }
 
-    private static List<Map<String, Object>> parameterSets(String algorithm, List<String> beamWidths, List<String> tenures, List<String> noImprovements, List<String> seeds, List<String> neighbourhoods, List<String> starts, List<String> timeBudgets, List<String> kicks) {
+    private static List<Map<String, Object>> parameterSets(String algorithm, List<String> beamWidths, List<String> tenures, List<String> noImprovements, List<String> seeds, List<String> neighbourhoods, List<String> starts, List<String> timeBudgets, List<String> kicks, List<String> heuristics) {
         List<Map<String, Object>> sets = new ArrayList<>();
         String algo = algorithm.toUpperCase();
 
-        if (algo.equals("GREEDY")) {
-            sets.add(new LinkedHashMap<>());
-            return sets;
-        }
-        if (algo.equals("BEAM")) {
-            for (String beam : beamWidths) {
+        for (String heuristic : heuristics) {
+            String heur = heuristic.toUpperCase();
+
+            if (algo.equals("GREEDY")) {
                 Map<String, Object> params = new LinkedHashMap<>();
-                params.put("beam", Integer.parseInt(beam));
+                params.put("heur", heur);
                 sets.add(params);
-            }
-            return sets;
-        }
-        if (algo.equals("TABU")) {
-            for (String start : starts) {
-                for (String neighbourhood : neighbourhoods) {
-                    for (String tenure : tenures) {
-                        for (String noImprove : noImprovements) {
-                            for (String time : timeBudgets) {
-                                for (String kick : kicks) {
-                                    for (String seed : seeds) {
-                                        Map<String, Object> params = new LinkedHashMap<>();
-                                        params.put("start", start.toUpperCase());
-                                        params.put("nb", neighbourhood.toUpperCase());
-                                        params.put("tenure", Integer.parseInt(tenure));
-                                        params.put("noImprove", Integer.parseInt(noImprove));
-                                        long timeBudget = Long.parseLong(time);
-                                        if (timeBudget > 0) { params.put("timeMs", timeBudget); }
-                                        params.put("kick", Integer.parseInt(kick));
-                                        params.put("seed", Long.parseLong(seed));
-                                        sets.add(params);
+            } else if (algo.equals("BEAM")) {
+                for (String beam : beamWidths) {
+                    Map<String, Object> params = new LinkedHashMap<>();
+                    params.put("heur", heur);
+                    params.put("beam", Integer.parseInt(beam));
+                    sets.add(params);
+                }
+            } else if (algo.equals("TABU")) {
+                for (String start : starts) {
+                    for (String neighbourhood : neighbourhoods) {
+                        for (String tenure : tenures) {
+                            for (String noImprove : noImprovements) {
+                                for (String time : timeBudgets) {
+                                    for (String kick : kicks) {
+                                        for (String seed : seeds) {
+                                            Map<String, Object> params = new LinkedHashMap<>();
+                                            params.put("heur", heur);
+                                            params.put("start", start.toUpperCase());
+                                            params.put("nb", neighbourhood.toUpperCase());
+                                            params.put("tenure", Integer.parseInt(tenure));
+                                            params.put("noImprove", Integer.parseInt(noImprove));
+                                            long timeBudget = Long.parseLong(time);
+                                            if (timeBudget > 0) { params.put("timeMs", timeBudget); }
+                                            params.put("kick", Integer.parseInt(kick));
+                                            params.put("seed", Long.parseLong(seed));
+                                            sets.add(params);
+                                        }
                                     }
                                 }
                             }
                         }
                     }
                 }
+            } else {
+                throw new IllegalArgumentException("Unknown algorithm: " + algorithm);
             }
-            return sets;
         }
-        throw new IllegalArgumentException("Unknown algorithm: " + algorithm);
+        return sets;
     }
 
     private static RunLog solveOnce(String instance, JsspProblem problem, String algorithm, Map<String, Object> params, Path outFolder, boolean[] stoppedByLimit) throws IOException {
-        IHeuristic heuristic = new MakespanEstimateHeuristic(problem);
+        IHeuristic heuristic = buildHeuristic((String) params.get("heur"), problem);
         ScheduleValidator validator = new ScheduleValidator();
         SearchStatistics statistics = algorithm.equals("GREEDY") ? new SearchStatistics(1000, GREEDY_MAX_EXPANSIONS) : new SearchStatistics();
 
@@ -222,6 +228,22 @@ public class Main {
         );
     }
 
+    private static IHeuristic buildHeuristic(String name, JsspProblem problem) {
+        String selected = (name == null) ? "MAKESPAN" : name.toUpperCase();
+        switch (selected) {
+            case "MAKESPAN":
+                return new MakespanEstimateHeuristic(problem);
+            case "NEXT-T-START":
+                return new NextTStartHeuristic(problem);
+            case "NEXT-T-MAX":
+                return new NextTMaxHeuristic(problem, new Slack(problem));
+            case "COMBINED":
+                return new CombineHeuristics(problem);
+            default:
+                throw new IllegalArgumentException("Unknown heuristic: " + name);
+        }
+    }
+
     private static ISearchAlgorithm buildSolver(String algorithm, JsspProblem problem, IHeuristic heuristic, SearchStatistics statistics, Map<String, Object> params, TabuSearch[] tabuRef) {
         switch (algorithm) {
             case "GREEDY":
@@ -253,7 +275,6 @@ public class Main {
                 throw new IllegalArgumentException("Unknown algorithm: " + algorithm);
         }
     }
-
 
     private static IStartDecoder buildStartDecoder(String name, JsspProblem problem, IHeuristic heuristic, long seed) {
         IStartDecoder cold = new DwellStartDecoder(new Random(seed));

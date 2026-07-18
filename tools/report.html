@@ -202,11 +202,16 @@
         <table class="cmp"><thead><tr><th>Algorithm</th><th class="num">Makespan</th><th class="num">Time</th><th class="num">Expanded</th></tr></thead>
             <tbody id="cmpBody"></tbody></table>
 
+        <h2>Heuristik-Vergleich</h2>
+        <table class="cmp"><thead><tr><th>Heuristik</th><th>Algo</th><th class="num">Makespan</th><th>Valid</th><th class="num">Zeit</th><th class="num">Expanded</th></tr></thead>
+            <tbody id="heurBody"></tbody></table>
+
     </div>
 </div>
 
 <script>
     let DATA={instances:{}};
+    let ALL_RUNS=[];
     let TABU_STATS={};
     let BEAM_SWEEP={};
     let DATASETS=[];
@@ -849,7 +854,25 @@
         }
         applyRuns(runs,mapping,broken);
     }
+    function renderHeurTable(){
+        const rows=ALL_RUNS
+            .filter(r=>r.instanceKey===state.ds)
+            .sort((a,b)=>(a.makespan??1e18)-(b.makespan??1e18));
+        const valids=rows.filter(r=>r.valid&&r.makespan!=null).map(r=>r.makespan);
+        const best=valids.length?Math.min(...valids):null;
+        document.getElementById('heurBody').innerHTML=rows.map(r=>{
+            const heur=(r.params&&r.params.heur)||'MAKESPAN';
+            const isBest=r.valid&&r.makespan===best;
+            return `<tr${isBest?' style="font-weight:700"':''}>`+
+                `<td>${heur}</td><td>${r.algorithm}</td>`+
+                `<td class="num">${r.makespan??'\u2014'}</td>`+
+                `<td>${r.valid?'\u2713':'\u2717'}</td>`+
+                `<td class="num">${r.timeMs??'\u2014'} ms</td>`+
+                `<td class="num">${r.expanded??'\u2014'}</td></tr>`;
+        }).join('');
+    }
     function applyRuns(runs,mapping,broken){
+        ALL_RUNS=runs;
         const grouped=byInstance(runs);
         DATA=buildData(grouped,mapping);
         TABU_STATS=buildTabuStats(grouped);
@@ -871,7 +894,7 @@
 
         document.getElementById('loader').style.display='none';
         document.getElementById('app').style.display='';
-        buildSegs();buildGanttPick();render();
+        buildSegs();buildGanttPick();render();renderHeurTable();
     }
 
     async function entryFiles(entry,out){

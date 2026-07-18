@@ -1,0 +1,63 @@
+package at.fhv.evaluation.implementation;
+
+import at.fhv.evaluation.IHeuristic;
+import at.fhv.evaluation.Slack;
+import at.fhv.model.jssp.Job;
+import at.fhv.model.jssp.JsspProblem;
+import at.fhv.solver.State;
+
+import static java.lang.Math.min;
+
+public class NextTMaxHeuristic implements IHeuristic {
+    private static final int WEIGHT = 1000;
+    private JsspProblem jsspProblem;
+    private AggregationNextTMax aggregation;
+    private IHeuristic tieBreak;
+    private double epsilon;
+    private Slack slack;
+
+    public NextTMaxHeuristic(JsspProblem jsspProblem, Slack slack) {
+        this.jsspProblem = jsspProblem;
+        this.slack = slack;
+        this.aggregation = AggregationNextTMax.SUM;
+        this.tieBreak = new NextTStartHeuristic(jsspProblem);
+        this.epsilon = 1e-3;
+    }
+
+    @Override
+    public double evaluate(State state) {
+        double primary = (aggregation == AggregationNextTMax.SUM) ? sumInverse(state) : minBased(state);
+        if (tieBreak == null) { return primary; }
+        return primary + epsilon * normalize(tieBreak.evaluate(state));
+    }
+
+
+    private int sumInverse(State state) {
+        int weight = 0;
+
+        for (Job job : jsspProblem.getJobs()) {
+            int s = slack.slackOf(job.jobId(), state.nextOperation()[job.jobId()]);
+            if (s == Slack.NO_BINDING) { continue; }
+            if (s <= 0) { weight += WEIGHT * 100; }
+            else { weight += WEIGHT / s; }
+        }
+        return weight;
+    }
+
+
+    private int minBased(State state) {
+        int smallest = Slack.NO_BINDING;
+
+        for (Job job : jsspProblem.getJobs()) {
+            smallest = min(smallest, slack.slackOf(job.jobId(), state.nextOperation()[job.jobId()]));
+        }
+        if (smallest == Slack.NO_BINDING) {return 0;}
+
+        return -(smallest);
+    }
+
+
+    private double normalize(double x) {
+        return x / ( 1 + x);
+    }
+}
