@@ -3,7 +3,7 @@ import at.fhv.solver.IStartDecoder;
 import at.fhv.solver.impl.decoder.RandomStartDecoder;
 import at.fhv.solver.impl.tabu.INeighbourhood;
 import at.fhv.solver.impl.tabu.ScheduleEvaluator;
-import at.fhv.solver.impl.TabuSearch;
+import at.fhv.solver.impl.tabu.TabuSearch;
 import at.fhv.solver.impl.tabu.impl.N5Neighbourhood;
 import at.fhv.solver.validation.ScheduleValidator;
 import at.fhv.solver.validation.ValidationResult;

@@ -2,10 +2,7 @@ package at.fhv;
 
 import at.fhv.evaluation.IHeuristic;
 import at.fhv.evaluation.Slack;
-import at.fhv.evaluation.implementation.CombineHeuristics;
-import at.fhv.evaluation.implementation.MakespanEstimateHeuristic;
-import at.fhv.evaluation.implementation.NextTStartHeuristic;
-import at.fhv.evaluation.implementation.NextTMaxHeuristic;
+import at.fhv.evaluation.implementation.*;
 import at.fhv.experiment.RunLog;
 import at.fhv.experiment.RunLogWriter;
 import at.fhv.model.exception.SolveFailedException;
@@ -13,13 +10,15 @@ import at.fhv.model.jssp.JsspProblem;
 import at.fhv.model.jssp.Schedule;
 import at.fhv.solver.ISearchAlgorithm;
 import at.fhv.solver.IStartDecoder;
-import at.fhv.solver.impl.BeamSearch;
-import at.fhv.solver.impl.GreedySearch;
-import at.fhv.solver.impl.TabuSearch;
+import at.fhv.solver.impl.beam.BeamSearch;
+import at.fhv.solver.impl.beamStack.BeamStackSearch;
+import at.fhv.solver.impl.bulb.BULBSearch;
 import at.fhv.solver.impl.decoder.DwellStartDecoder;
 import at.fhv.solver.impl.decoder.StartDecoder;
+import at.fhv.solver.impl.greedy.GreedySearch;
 import at.fhv.solver.impl.tabu.INeighbourhood;
 import at.fhv.solver.impl.tabu.ScheduleEvaluator;
+import at.fhv.solver.impl.tabu.TabuSearch;
 import at.fhv.solver.impl.tabu.impl.*;
 import at.fhv.solver.validation.MemorySampler;
 import at.fhv.solver.validation.ScheduleValidator;
@@ -42,6 +41,7 @@ import java.util.Random;
 
 public class Main {
     private static final long GREEDY_MAX_EXPANSIONS = 1_000_000;
+    private static final long BACKTRACKING_MAX_EXPANSIONS = 2_000_000;
     private static final int GREEDY_MAX_NODES = 1_500_000;
     private static final int WARM_START_BEAM_WIDTH = 100;
     private static final int TABU_MAX_RESTARTS = 100;
@@ -65,19 +65,20 @@ public class Main {
 
     private static void printUsage() {
         System.out.println("Commands:");
-        System.out.println("  run  [--algo GREEDY|BEAM|TABU] [--instance <path>] [--beam <k>]");
+        System.out.println("  run  [--algo GREEDY|BEAM|BULB|BEAMSTACK|TABU] [--instance <path>] [--beam <k>]");
         System.out.println("  [--tenure <n>] [--noimp <n>] [--seed <n>] [--nb AUTO|N1|N5|N6|ADJ|STRIDE]");
         System.out.println("  [--time <ms>] wall clock budget per TABU run, 0 = use --noimp only");
         System.out.println("  [--kick <n>] non improving iterations before perturbing, default 2");
         System.out.println("  [--start COLD|WARM] [--out <folder>]");
-        System.out.println("  [--heuristic MAKESPAN|NEXT-T-START|NEXT-T-MAX|COMBINED] one or a list");
+        System.out.println("  [--heuristic MAKESPAN|NEXT-T-START|NEXT-T-MAX|COMBINED|LEXICOGRAPHIC] one or a list");
         System.out.println("  Lists (1,5,20) and ranges (1-20) are allowed.");
         System.out.println("  charts  PNG charts from docs/assets/**/*-samples.csv");
         System.out.println();
         System.out.println("Examples:");
         System.out.println(" run --algo TABU --instance benchmarks/ft06.txt --seed 1-20");
         System.out.println("  run --algo BEAM --instance benchmarks/ft06.txt --beam 1,5,20,50,100");
-        System.out.println("  run --algo BEAM --instance benchmarks/demoanlage.txt --heuristic MAKESPAN,NEXT-T-START,NEXT-T-MAX,COMBINED");
+        System.out.println("  run --algo BULB,BEAMSTACK --instance benchmarks/demoanlage.txt --beam 5,20,50");
+        System.out.println("  run --algo BEAM --instance benchmarks/demoanlage.txt --heuristic MAKESPAN,LEXICOGRAPHIC");
     }
 
     private static void runAll(String[] args) throws IOException {
@@ -103,7 +104,8 @@ public class Main {
             JsspProblem problem = parser.parse(instance);
             System.out.println("== " + instance + " (" + problem.getJobs().size() + " jobs, " + problem.getMachines().size() + " machines) ==");
 
-            for (String algorithm : algorithms) {
+            for (String rawAlgorithm : algorithms) {
+                String algorithm = rawAlgorithm.toUpperCase().replace("-", "");
                 for (Map<String, Object> params : parameterSets(algorithm, beamWidths, tenures, noImprovements, seeds, neighbourhoods, starts, timeBudgets, kicks, heuristics)) {
                     boolean[] stoppedByLimit = new boolean[1];
                     RunLog log = solveOnce(instance, problem, algorithm.toUpperCase(), params, outFolder, stoppedByLimit);
@@ -142,7 +144,7 @@ public class Main {
                 Map<String, Object> params = new LinkedHashMap<>();
                 params.put("heur", heur);
                 sets.add(params);
-            } else if (algo.equals("BEAM")) {
+            } else if (algo.equals("BEAM") || algo.equals("BULB") || algo.equals("BEAMSTACK")) {
                 for (String beam : beamWidths) {
                     Map<String, Object> params = new LinkedHashMap<>();
                     params.put("heur", heur);
@@ -185,7 +187,14 @@ public class Main {
     private static RunLog solveOnce(String instance, JsspProblem problem, String algorithm, Map<String, Object> params, Path outFolder, boolean[] stoppedByLimit) throws IOException {
         IHeuristic heuristic = buildHeuristic((String) params.get("heur"), problem);
         ScheduleValidator validator = new ScheduleValidator();
-        SearchStatistics statistics = algorithm.equals("GREEDY") ? new SearchStatistics(1000, GREEDY_MAX_EXPANSIONS) : new SearchStatistics();
+        SearchStatistics statistics;
+        if (algorithm.equals("GREEDY")) {
+            statistics = new SearchStatistics(1000, GREEDY_MAX_EXPANSIONS);
+        } else if (algorithm.equals("BULB") || algorithm.equals("BEAMSTACK")) {
+            statistics = new SearchStatistics(1000, BACKTRACKING_MAX_EXPANSIONS);
+        } else {
+            statistics = new SearchStatistics();
+        }
 
         String runId = runId(instance, algorithm, params);
         Files.createDirectories(outFolder);
@@ -239,6 +248,15 @@ public class Main {
                 return new NextTMaxHeuristic(problem, new Slack(problem));
             case "COMBINED":
                 return new CombineHeuristics(problem);
+            case "LEXICOGRAPHIC":
+                Slack slack = new Slack(problem);
+                return new Combine2Heuristic(
+                        new MakespanEstimateHeuristic(problem),
+                        List.of(
+                                new NextTMaxHeuristic(problem, slack),
+                                new NextTStartHeuristic(problem)
+                        )
+                );
             default:
                 throw new IllegalArgumentException("Unknown heuristic: " + name);
         }
@@ -250,6 +268,10 @@ public class Main {
                 return new GreedySearch(heuristic, statistics, GREEDY_MAX_NODES);
             case "BEAM":
                 return new BeamSearch(heuristic, (Integer) params.get("beam"), statistics);
+            case "BULB":
+                return new BULBSearch(heuristic, (Integer) params.get("beam"), statistics);
+            case "BEAMSTACK":
+                return new BeamStackSearch(heuristic, (Integer) params.get("beam"), statistics);
             case "TABU":
                 long seed = (Long) params.get("seed");
                 ScheduleEvaluator evaluator = new ScheduleEvaluator(problem);

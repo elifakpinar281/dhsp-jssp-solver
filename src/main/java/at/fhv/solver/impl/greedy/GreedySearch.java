@@ -1,4 +1,4 @@
-package at.fhv.solver.impl;
+package at.fhv.solver.impl.greedy;
 
 import at.fhv.model.jssp.*;
 import at.fhv.solver.ISearchAlgorithm;

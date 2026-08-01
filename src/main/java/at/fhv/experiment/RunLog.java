@@ -1,7 +1,7 @@
 package at.fhv.experiment;
 
 import at.fhv.model.jssp.ScheduledOperation;
-import at.fhv.solver.impl.TabuSearch;
+import at.fhv.solver.impl.tabu.TabuSearch;
 
 import java.util.List;
 import java.util.Map;

@@ -1,10 +1,9 @@
-package at.fhv.solver.impl;
+package at.fhv.solver.impl.tabu;
 
 import at.fhv.model.jssp.JsspProblem;
 import at.fhv.model.jssp.Schedule;
 import at.fhv.solver.ISearchAlgorithm;
 import at.fhv.solver.IStartDecoder;
-import at.fhv.solver.impl.tabu.*;
 
 import java.util.ArrayList;
 import java.util.Collections;
