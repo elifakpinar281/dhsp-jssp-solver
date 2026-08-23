@@ -65,7 +65,7 @@ public class Main {
         System.out.println("  [--time <ms>] wall clock budget per TABU run, 0 = use --noimp only");
         System.out.println("  [--kick <n>] non improving iterations before destroying, default 2");
         System.out.println("  [--start COLD|WARM] [--out <folder>]");
-        System.out.println("  [--heuristic MAKESPAN|NEXT-T-START|NEXT-T-MAX|COMBINED|LEXICOGRAPHIC] one or a list");
+        System.out.println("  [--heuristic MAKESPAN|NEXT-T-START|NEXT-T-MAX|LEXICOGRAPHIC] one or a list");
         System.out.println("  Lists (1,5,20) and ranges (1-20) are allowed.");
         System.out.println();
         System.out.println("Examples:");
@@ -234,16 +234,8 @@ public class Main {
             case "NEXT-T-MAX":
                 return new NextTMaxHeuristic(problem, new Slack(problem));
             case "COMBINED":
-                return new CombineHeuristics(problem);
-            case "LEXICOGRAPHIC":
                 Slack slack = new Slack(problem);
-                return new Combine2Heuristic(
-                        new MakespanEstimateHeuristic(problem),
-                        List.of(
-                                new NextTMaxHeuristic(problem, slack),
-                                new NextTStartHeuristic(problem)
-                        )
-                );
+                return new CombineHeuristics(new MakespanEstimateHeuristic(problem), List.of(new NextTMaxHeuristic(problem, slack), new NextTStartHeuristic(problem)));
             default:
                 throw new IllegalArgumentException("Unknown heuristic: " + name);
         }

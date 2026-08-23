@@ -5,33 +5,33 @@ import at.fhv.evaluation.Slack;
 import at.fhv.model.jssp.JsspProblem;
 import at.fhv.solver.State;
 
+import java.util.List;
+
 public class CombineHeuristics implements IHeuristic {
+    private static final double TIE_BREAK_SCALE = 1e-3;
 
-    private final IHeuristic makespan;
-    private final IHeuristic dwell;
-    private final IHeuristic start;
+    private final IHeuristic primary;
+    private final List<IHeuristic> tieBreaks;
 
-    private final double weightDwell;
-    private final double weightStart;
-
-    public CombineHeuristics(JsspProblem problem) {
-        Slack slack = new Slack(problem);
-        this.makespan = new MakespanEstimateHeuristic(problem);
-        this.dwell = new NextTMaxHeuristic(problem, slack);
-        this.start = new NextTStartHeuristic(problem);
-        this.weightDwell = 1.0;
-        this.weightStart = 0.01;
+    public CombineHeuristics(IHeuristic primary, List<IHeuristic> tieBreaks) {
+        this.primary = primary;
+        this.tieBreaks = tieBreaks;
     }
 
     @Override
     public double evaluate(State state) {
-        double m = makespan.evaluate(state);
-        double d = normalize(dwell.evaluate(state));
-        double s = normalize(start.evaluate(state));
-        return m + weightDwell * d + weightStart * s;
+        double value = primary.evaluate(state);
+        double scale = TIE_BREAK_SCALE;
+        for (IHeuristic tieBreak : tieBreaks) {
+            value += scale * normalize(tieBreak.evaluate(state));
+            scale *= TIE_BREAK_SCALE;
+        }
+        return value;
     }
 
     private double normalize(double x) {
-        return x / (1.0 + x);
+        double magnitude = Math.abs(x);
+        double normalized = magnitude / (1.0 + magnitude);
+        return x < 0 ? -normalized : normalized;
     }
 }

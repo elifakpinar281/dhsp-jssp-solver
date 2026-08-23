@@ -6,31 +6,20 @@ import at.fhv.model.jssp.Job;
 import at.fhv.model.jssp.JsspProblem;
 import at.fhv.solver.State;
 
-import static java.lang.Math.min;
-
+// kleiner Slack bedeutet hoher Wert (dringender)
 public class NextTMaxHeuristic implements IHeuristic {
     private static final int WEIGHT = 1000;
-    private JsspProblem jsspProblem;
-    private IHeuristic tieBreak;
-    private double epsilon;
-    private Slack slack;
+
+    private final JsspProblem jsspProblem;
+    private final Slack slack;
 
     public NextTMaxHeuristic(JsspProblem jsspProblem, Slack slack) {
         this.jsspProblem = jsspProblem;
         this.slack = slack;
-        this.tieBreak = new NextTStartHeuristic(jsspProblem);
-        this.epsilon = 1e-3;
     }
 
     @Override
     public double evaluate(State state) {
-        double primary = sumInverse(state);
-        if (tieBreak == null) { return primary; }
-        return primary + epsilon * normalize(tieBreak.evaluate(state));
-    }
-
-
-    private int sumInverse(State state) {
         int weight = 0;
 
         for (Job job : jsspProblem.getJobs()) {
@@ -39,11 +28,7 @@ public class NextTMaxHeuristic implements IHeuristic {
             if (s <= 0) { weight += WEIGHT * 100; }
             else { weight += WEIGHT / s; }
         }
+
         return weight;
-    }
-
-
-    private double normalize(double x) {
-        return x / ( 1 + x);
     }
 }
