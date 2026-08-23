@@ -103,7 +103,7 @@ available after being transported out of the previous bath, the time the target
 bath becomes free, and the time a suitable crane becomes available.
 
 The second is the maximum dwell time. Because the time a product may stay in a bath is limited, choosing the earliest possible start for one operation can make a
-later operation infeasible. In that case the product would have to stay too long
+later operation invalid. In that case the product would have to stay too long
 in its current bath. The transition model must therefore also check that scheduling the operation does not break any maximum dwell time. Otherwise the
 resulting state is not admissible.
 

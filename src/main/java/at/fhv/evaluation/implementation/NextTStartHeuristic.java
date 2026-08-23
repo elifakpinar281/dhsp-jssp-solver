@@ -10,19 +10,16 @@ public class NextTStartHeuristic implements IHeuristic {
     private final double PENALTY_BLOCKED;
     private JsspProblem jsspProblem;
     private int restTime;
-    private AggregationNextTStart aggregationNextTStart;
 
     public NextTStartHeuristic(JsspProblem jsspProblem) {
         this.jsspProblem = jsspProblem;
         PENALTY_BLOCKED = 1e9;
         restTime = 0;
-        aggregationNextTStart = AggregationNextTStart.SUM;
     }
 
     @Override
     public double evaluate(State state) {
         int total = 0;
-        int max = 0;
 
         for (Job job : jsspProblem.getJobs()) {
             int nextIndex = state.nextOperation()[job.jobId()];
@@ -32,12 +29,9 @@ public class NextTStartHeuristic implements IHeuristic {
             int start = earliestStartOf(state, job.jobId(), nextIndex, nextOperation);
             if (start == State.BLOCKED) { return PENALTY_BLOCKED; }
             total = total + start;
-            max = Math.max(max, start);
         }
 
-        return (aggregationNextTStart == AggregationNextTStart.SUM) ? total : max;
-
-
+        return total;
     }
 
     private int earliestStartOf(State state, int jobId, int nextIndex, Operation nextOperation) {

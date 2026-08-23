@@ -8,6 +8,8 @@ import at.fhv.solver.impl.tabu.ScheduleEvaluator;
 
 import java.util.*;
 
+// Eher gut für Blocking
+
 public class StrideNeighbourhood implements INeighbourhood {
     @Override
     public List<Move> generate(ScheduleEvaluator.EvaluationResult evaluationResult, MachineSequences machineSequences) {
@@ -16,11 +18,11 @@ public class StrideNeighbourhood implements INeighbourhood {
 
         for (Operation operation : evaluationResult.criticalPath()) {
             addStrideMoves(operation, machineSequences, moves, seen);
-            addAdjacentMoves(operation, machineSequences, moves, seen);
+            addNearestMoves(operation, machineSequences, moves, seen);
         }
 
         if (moves.isEmpty()) {
-            return allAdjacentSwaps(machineSequences);
+            return allNearestSwaps(machineSequences);
         }
         return moves;
     }
@@ -37,7 +39,7 @@ public class StrideNeighbourhood implements INeighbourhood {
         }
     }
 
-    private void addAdjacentMoves(Operation operation, MachineSequences machineSequences, List<Move> moves, Set<Move.MoveAttribute> seen) {
+    private void addNearestMoves(Operation operation, MachineSequences machineSequences, List<Move> moves, Set<Move.MoveAttribute> seen) {
         int index = machineSequences.positionOf(operation);
         if (index < 0) { return; }
 
@@ -58,7 +60,7 @@ public class StrideNeighbourhood implements INeighbourhood {
         }
     }
 
-    private List<Move> allAdjacentSwaps(MachineSequences machineSequences) {
+    private List<Move> allNearestSwaps(MachineSequences machineSequences) {
         List<Move> moves = new ArrayList<>();
         for (Map.Entry<Integer, List<Operation>> entry : machineSequences.orderPerMachine().entrySet()) {
             List<Operation> operations = entry.getValue();

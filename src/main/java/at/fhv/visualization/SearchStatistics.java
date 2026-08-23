@@ -1,17 +1,12 @@
 package at.fhv.visualization;
 
-import java.io.BufferedReader;
 import java.io.BufferedWriter;
-import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
 
 public class SearchStatistics {
     private final long sampleInterval;
     private final long maxExpansions;
-    private final List<Sample> samples = new ArrayList<>();
     private int totalOperations = 0;
     private boolean stoppedByLimit = false;
 
@@ -49,7 +44,6 @@ public class SearchStatistics {
 
         if (firstSample || intervalReached) {
             Sample sample = new Sample(expansions, reached, frontier, maxDepth);
-            samples.add(sample);
             writeSample(sample);
             lastSampledExpansions = expansions;
         }
@@ -77,31 +71,6 @@ public class SearchStatistics {
         } catch (IOException exception) {
             System.err.println("Could not write sample: " + exception.getMessage());
         }
-    }
-
-    public static SearchStatistics fromCsv(String path) throws IOException {
-        SearchStatistics searchStatistics = new SearchStatistics();
-        try (BufferedReader reader = new BufferedReader(new FileReader(path))) {
-            String firstLine = reader.readLine();
-            if (firstLine != null && firstLine.startsWith("totalOperations,")) {
-                searchStatistics.totalOperations = Integer.parseInt(firstLine.split(",")[1].trim());
-            }
-            reader.readLine();
-
-            String line;
-            while ((line = reader.readLine()) != null) {
-                if (line.isBlank()) {
-                    continue;
-                }
-                String[] parts = line.split(",");
-                long expansions = Long.parseLong(parts[0].trim());
-                int reached = Integer.parseInt(parts[1].trim());
-                int frontier = Integer.parseInt(parts[2].trim());
-                int maxDepth = Integer.parseInt(parts[3].trim());
-                searchStatistics.samples.add(new Sample(expansions, reached, frontier, maxDepth));
-            }
-        }
-        return searchStatistics;
     }
 
     public void markStoppedByLimit() {
@@ -135,24 +104,12 @@ public class SearchStatistics {
         return false;
     }
 
-    public List<Sample> getSamples() {
-        return samples;
-    }
-
-    public int getTotalOperations() {
-        return totalOperations;
-    }
-
     public long getLastExpansions() {
         return lastExpansions;
     }
 
     public int getLastReached() {
         return lastReached;
-    }
-
-    public int getLastFrontier() {
-        return lastFrontier;
     }
 
     public int getLastMaxDepth() {

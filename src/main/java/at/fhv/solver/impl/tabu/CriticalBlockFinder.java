@@ -19,9 +19,9 @@ public class CriticalBlockFinder {
             }
 
             Operation last = currentBlock.get(currentBlock.size() - 1);
-            boolean machineAdjacent = operation.equals(machineSequences.machineSuccessor(last));
+            boolean machineNearest = operation.equals(machineSequences.machineSuccessor(last));
 
-            if (machineAdjacent) {
+            if (machineNearest) {
                 currentBlock.add(operation);
             } else {
                 if (currentBlock.size() >= 2) { blocks.add(currentBlock); }

@@ -23,11 +23,9 @@ import at.fhv.solver.impl.tabu.impl.*;
 import at.fhv.solver.validation.MemorySampler;
 import at.fhv.solver.validation.ScheduleValidator;
 import at.fhv.solver.validation.ValidationResult;
-import at.fhv.visualization.RenderCharts;
 import at.fhv.visualization.SearchStatistics;
 
 import java.io.IOException;
-import java.io.PrintStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDateTime;
@@ -55,9 +53,6 @@ public class Main {
             case "run":
                 runAll(rest);
                 break;
-            case "charts":
-                RenderCharts.run(rest);
-                break;
             default:
                 printUsage();
         }
@@ -66,17 +61,16 @@ public class Main {
     private static void printUsage() {
         System.out.println("Commands:");
         System.out.println("  run  [--algo GREEDY|BEAM|BULB|BEAMSTACK|TABU] [--instance <path>] [--beam <k>]");
-        System.out.println("  [--tenure <n>] [--noimp <n>] [--seed <n>] [--nb AUTO|N1|N5|N6|ADJ|STRIDE]");
+        System.out.println("  [--tenure <n>] [--noimp <n>] [--seed <n>] [--nb AUTO|N5|N6|STRIDE]");
         System.out.println("  [--time <ms>] wall clock budget per TABU run, 0 = use --noimp only");
-        System.out.println("  [--kick <n>] non improving iterations before perturbing, default 2");
+        System.out.println("  [--kick <n>] non improving iterations before destroying, default 2");
         System.out.println("  [--start COLD|WARM] [--out <folder>]");
         System.out.println("  [--heuristic MAKESPAN|NEXT-T-START|NEXT-T-MAX|COMBINED|LEXICOGRAPHIC] one or a list");
         System.out.println("  Lists (1,5,20) and ranges (1-20) are allowed.");
-        System.out.println("  charts  PNG charts from docs/assets/**/*-samples.csv");
         System.out.println();
         System.out.println("Examples:");
-        System.out.println(" run --algo TABU --instance benchmarks/ft06.txt --seed 1-20");
-        System.out.println("  run --algo BEAM --instance benchmarks/ft06.txt --beam 1,5,20,50,100");
+        System.out.println(" run --algo TABU --instance benchmarks/demoanlage.txt --seed 1-20");
+        System.out.println("  run --algo BEAM --instance benchmarks/demoanlage.txt --beam 1,5,20,50,100");
         System.out.println("  run --algo BULB,BEAMSTACK --instance benchmarks/demoanlage.txt --beam 5,20,50");
         System.out.println("  run --algo BEAM --instance benchmarks/demoanlage.txt --heuristic MAKESPAN,LEXICOGRAPHIC");
     }
@@ -121,7 +115,7 @@ public class Main {
                 }
             }
         }
-        System.out.println(written + " log(s) written. Next: python3 tools/build_report.py");
+        System.out.println(written + " log(s) written to " + outFolder + ". Feed the CSV/JSON logs to the dashboard.");
 
         if (!failures.isEmpty()) {
             StringBuilder message = new StringBuilder();
@@ -203,19 +197,12 @@ public class Main {
         TabuSearch[] tabuRef = new TabuSearch[1];
         ISearchAlgorithm solver = buildSolver(algorithm, problem, heuristic, statistics, params, tabuRef);
 
-        PrintStream realOut = System.out;
         MemorySampler memorySampler = new MemorySampler();
         memorySampler.start();
         long start = System.currentTimeMillis();
-        Schedule schedule;
-        try {
-            if (algorithm.equals("TABU")) { System.setOut(new PrintStream(PrintStream.nullOutputStream()));}
-            schedule = solver.solve(problem);
-        } finally {
-            System.setOut(realOut);
-        }
+        Schedule schedule = solver.solve(problem);
         long elapsed = System.currentTimeMillis() - start;
-        memorySampler._stop();
+        memorySampler.shutdown();
         statistics.closeLog();
         stoppedByLimit[0] = statistics.isStoppedByLimit();
 
@@ -312,6 +299,7 @@ public class Main {
         }
     }
 
+    // Stride == Auto, da es als einzige Nachbarschaft Blocking und parallele Bäder berücksichtigt - Rest zum Vergleichen
     private static INeighbourhood buildNeighbourhood(String name, JsspProblem problem) {
         String selected = name == null ? "AUTO" : name.toUpperCase();
         if (selected.equals("AUTO")) {
@@ -319,14 +307,10 @@ public class Main {
         }
 
         switch (selected) {
-            case "N1":
-                return new N1Neighbourhood();
             case "N5":
                 return new N5Neighbourhood();
             case "N6":
                 return new N6Neighbourhood();
-            case "ADJ":
-                return new AdjacentSwapNeighbourhood();
             case "STRIDE":
                 return new StrideNeighbourhood();
             default:

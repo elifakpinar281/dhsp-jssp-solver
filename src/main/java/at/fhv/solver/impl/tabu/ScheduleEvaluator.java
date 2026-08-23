@@ -71,7 +71,6 @@ public class ScheduleEvaluator {
             List<Operation> criticalPath,
             Map<Operation, Integer> head
     ) {
-        public boolean dwellValid() { return valid; }
     }
 
     public record Result(boolean valid, int makespan) {}
@@ -115,69 +114,6 @@ public class ScheduleEvaluator {
 
         List<Operation> criticalPath = criticalPath(start, machinePredecessor, machineSuccessor, makespan);
         return new EvaluationResult(makespan, true, criticalPath, toMap(start));
-    }
-
-    public Map<Operation, Integer> slack(MachineSequences sequences) {
-        Map<Operation, Integer> result = new HashMap<>();
-        if (operationCount == 0) { return result; }
-
-        int[] machinePredecessor = new int[operationCount];
-        int[] machineSuccessor = new int[operationCount];
-        buildLinks(sequences, machinePredecessor, machineSuccessor);
-
-        int[] start = solveWithLags(machinePredecessor, machineSuccessor);
-        if (start == null) { return result; }
-
-        int makespan = 0;
-        for (int i = 0; i < operationCount; i++) {
-            makespan = Math.max(makespan, start[i] + processingTime[i]);
-        }
-
-        List<int[]> arcs = buildArcs(machineSuccessor);
-
-        int[] latest = new int[operationCount];
-        for (int i = 0; i < operationCount; i++) {
-            latest[i] = makespan - processingTime[i];
-        }
-
-        for (int round = 0; round <= operationCount; round++) {
-            boolean changed = false;
-            for (int[] arc : arcs) {
-                int candidate = latest[arc[1]] - arc[2];
-                if (candidate < latest[arc[0]]) {
-                    latest[arc[0]] = candidate;
-                    changed = true;
-                }
-            }
-            if (!changed) { break; }
-        }
-
-        for (int i = 0; i < operationCount; i++) {
-            result.put(operations.get(i), latest[i] - start[i]);
-        }
-        return result;
-    }
-
-    private List<int[]> buildArcs(int[] machineSuccessor) {
-        List<int[]> arcs = new ArrayList<>();
-
-        for (int current = 0; current < operationCount; current++) {
-            if (jobSuccessor[current] != NONE) {
-                arcs.add(new int[]{current, jobSuccessor[current], processingTime[current]});
-            }
-            if (machineSuccessor[current] != NONE) {
-                arcs.add(new int[]{current, machineSuccessor[current], processingTime[current]});
-            }
-
-            int predecessor = jobPredecessor[current];
-            if (predecessor != NONE && maxDwellTime[predecessor] != Operation.NO_LIMIT) {
-                arcs.add(new int[]{current, predecessor, -maxDwellTime[predecessor]});
-            }
-            if (jsspProblem.isBlocking() && predecessor != NONE && machineSuccessor[predecessor] != NONE) {
-                arcs.add(new int[]{current, machineSuccessor[predecessor], 0});
-            }
-        }
-        return arcs;
     }
 
     private int index(Operation operation) {
@@ -243,6 +179,7 @@ public class ScheduleEvaluator {
             }
 
             int predecessor = jobPredecessor[current];
+
             if (predecessor != NONE && maxDwellTime[predecessor] != Operation.NO_LIMIT) {
                 targets[arcCount] = predecessor;
                 weights[arcCount] = -maxDwellTime[predecessor];

@@ -22,7 +22,7 @@ public class MemorySampler extends Thread {
         }
     }
 
-    public void _stop() {
+    public void shutdown() {
         running = false;
         interrupt();
     }

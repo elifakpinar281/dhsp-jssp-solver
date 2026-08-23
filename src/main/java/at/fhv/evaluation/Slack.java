@@ -21,7 +21,7 @@ public class Slack {
         for (Job job : jsspProblem.getJobs()) {
             int length = jsspProblem.getJobs().get(job.jobId()).operations().size();
             cache[job.jobId()] = new int[length];
-            Arrays.fill(cache[job.jobId()], -1); // noch nicht berechnet deswegen -1 :)
+            Arrays.fill(cache[job.jobId()], -1); // -1 = noch nicht berechnet
         }
     }
 

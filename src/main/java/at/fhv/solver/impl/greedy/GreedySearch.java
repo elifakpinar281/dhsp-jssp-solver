@@ -20,10 +20,6 @@ public class GreedySearch implements ISearchAlgorithm {
         this(heuristic, new SearchStatistics(), DEFAULT_MAX_NODES);
     }
 
-    public GreedySearch(IHeuristic heuristic, SearchStatistics statistics) {
-        this(heuristic, statistics, DEFAULT_MAX_NODES);
-    }
-
     public GreedySearch(IHeuristic heuristic, SearchStatistics statistics, int maxNodes) {
         this.heuristic = heuristic;
         this.statistics = statistics;

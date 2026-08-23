@@ -6,8 +6,9 @@ import at.fhv.solver.impl.tabu.*;
 import java.util.ArrayList;
 import java.util.List;
 
+// OP wird an MOVE_BEFORE oder MOVE_AFTER verschoben
+// auch zum vergleichen, da es mehr invalid Kandidaten erzeugt
 public class N6Neighbourhood implements INeighbourhood {
-
     @Override
     public List<Move> generate(ScheduleEvaluator.EvaluationResult evaluationResult, MachineSequences machineSequences) {
         List<Move> moves = new ArrayList<>();

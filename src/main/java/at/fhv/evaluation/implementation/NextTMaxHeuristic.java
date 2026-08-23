@@ -11,7 +11,6 @@ import static java.lang.Math.min;
 public class NextTMaxHeuristic implements IHeuristic {
     private static final int WEIGHT = 1000;
     private JsspProblem jsspProblem;
-    private AggregationNextTMax aggregation;
     private IHeuristic tieBreak;
     private double epsilon;
     private Slack slack;
@@ -19,14 +18,13 @@ public class NextTMaxHeuristic implements IHeuristic {
     public NextTMaxHeuristic(JsspProblem jsspProblem, Slack slack) {
         this.jsspProblem = jsspProblem;
         this.slack = slack;
-        this.aggregation = AggregationNextTMax.SUM;
         this.tieBreak = new NextTStartHeuristic(jsspProblem);
         this.epsilon = 1e-3;
     }
 
     @Override
     public double evaluate(State state) {
-        double primary = (aggregation == AggregationNextTMax.SUM) ? sumInverse(state) : minBased(state);
+        double primary = sumInverse(state);
         if (tieBreak == null) { return primary; }
         return primary + epsilon * normalize(tieBreak.evaluate(state));
     }
@@ -42,18 +40,6 @@ public class NextTMaxHeuristic implements IHeuristic {
             else { weight += WEIGHT / s; }
         }
         return weight;
-    }
-
-
-    private int minBased(State state) {
-        int smallest = Slack.NO_BINDING;
-
-        for (Job job : jsspProblem.getJobs()) {
-            smallest = min(smallest, slack.slackOf(job.jobId(), state.nextOperation()[job.jobId()]));
-        }
-        if (smallest == Slack.NO_BINDING) {return 0;}
-
-        return -(smallest);
     }
 
 

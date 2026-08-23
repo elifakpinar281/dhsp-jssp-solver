@@ -6,7 +6,6 @@ import at.fhv.solver.ISearchAlgorithm;
 import at.fhv.solver.IStartDecoder;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -18,7 +17,6 @@ public class TabuSearch implements ISearchAlgorithm {
     private static final int KICK_STRENGTH = 6;
     private static final int KICK_ATTEMPTS = 15;
     private static final int FULL_RESTART_EVERY = 4;
-    private static final int DEFAULT_MAX_NEIGHBOURS = 0;
     private static final int MAX_HISTORY = 50_000;
 
     public record IterationSnapshot(
@@ -38,8 +36,7 @@ public class TabuSearch implements ISearchAlgorithm {
     private final int kickThreshold;
     private final long timeBudgetMs;
 
-    private int maxNeighbours = DEFAULT_MAX_NEIGHBOURS;
-    private boolean verbose = true;
+    private boolean verbose = false;
     private final List<IterationSnapshot> history = new ArrayList<>();
 
     public TabuSearch(ScheduleEvaluator scheduleEvaluator, INeighbourhood neighbourhood, int tenure, int maxIterationsWithoutImprovement, IStartDecoder startDecoder) {
@@ -73,11 +70,6 @@ public class TabuSearch implements ISearchAlgorithm {
 
     public TabuSearch withVerbose(boolean verbose) {
         this.verbose = verbose;
-        return this;
-    }
-
-    public TabuSearch withMaxNeighbours(int maxNeighbours) {
-        this.maxNeighbours = Math.max(0, maxNeighbours);
         return this;
     }
 
@@ -121,7 +113,7 @@ public class TabuSearch implements ISearchAlgorithm {
             step(s, iteration);
 
             if (s.noImprovement >= kickThreshold) {
-                perturb(s, problem);
+                destroy(s, problem);
             }
         }
 
@@ -146,30 +138,24 @@ public class TabuSearch implements ISearchAlgorithm {
             return;
         }
 
-        if (maxNeighbours > 0 && neighbours.size() > maxNeighbours) {
-            neighbours = new ArrayList<>(neighbours);
-            Collections.shuffle(neighbours, random);
-            neighbours = neighbours.subList(0, maxNeighbours);
-        }
-
         List<Move> bestCandidates = new ArrayList<>();
         int bestCandidateMakespan = Integer.MAX_VALUE;
-        List<Move> bestFeasible = new ArrayList<>();
-        int bestFeasibleMakespan = Integer.MAX_VALUE;
+        List<Move> bestValid = new ArrayList<>();
+        int bestValidMakespan = Integer.MAX_VALUE;
 
-        boolean anyFeasible = false;
+        boolean anyValid = false;
 
         for (Move move : neighbours) {
             ScheduleEvaluator.Result result = scheduleEvaluator.evaluateResult(s.current.applied(move));
             if (!result.valid()) { continue; }
-            anyFeasible = true;
+            anyValid = true;
 
-            if (result.makespan() < bestFeasibleMakespan) {
-                bestFeasibleMakespan = result.makespan();
-                bestFeasible.clear();
-                bestFeasible.add(move);
-            } else if (result.makespan() == bestFeasibleMakespan) {
-                bestFeasible.add(move);
+            if (result.makespan() < bestValidMakespan) {
+                bestValidMakespan = result.makespan();
+                bestValid.clear();
+                bestValid.add(move);
+            } else if (result.makespan() == bestValidMakespan) {
+                bestValid.add(move);
             }
 
             boolean tabuMove = s.tabu.isTabu(move.getAttribute(), iteration);
@@ -185,12 +171,12 @@ public class TabuSearch implements ISearchAlgorithm {
             }
         }
 
-        if (!anyFeasible) {
+        if (!anyValid) {
             s.noImprovement++;
             return;
         }
 
-        List<Move> pool = bestCandidates.isEmpty() ? bestFeasible : bestCandidates;
+        List<Move> pool = bestCandidates.isEmpty() ? bestValid : bestCandidates;
         Move chosenMove = leastUsed(pool, s.frequency);
 
         s.current = s.current.applied(chosenMove);
@@ -244,7 +230,7 @@ public class TabuSearch implements ISearchAlgorithm {
         return true;
     }
 
-    private void perturb(SearchState s, JsspProblem problem) {
+    private void destroy(SearchState s, JsspProblem problem) {
         if (timeBudgetMs <= 0 && s.restarts >= maxRestarts) { return; }
         s.restarts++;
         boolean fullRestart = s.best == null || s.restarts % FULL_RESTART_EVERY == 0;
@@ -262,7 +248,7 @@ public class TabuSearch implements ISearchAlgorithm {
 
         if (verbose) {
             String reason = fullRestart ? "full restart from start decoder" : "kick from elite solution";
-            System.out.println("Perturbation " + s.restarts + " (" + reason + ")");
+            System.out.println("Destroy " + s.restarts + " (" + reason + ")");
         }
         remember(s);
     }

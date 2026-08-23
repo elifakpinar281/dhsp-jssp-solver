@@ -115,6 +115,7 @@ public class JsspProblem {
         return availableOperations;
     }
 
+    // Kettenlogik - wenn eine Op eine MaxTime hat, muss die nächste Op direkt dran anschließen (oder innerhalb MaxTime starten )
     public List<Operation> dwellChain(int jobId, int firstIndex) {
         List<Operation> operations = jobs.get(jobId).operations();
         List<Operation> chain = new ArrayList<>();
@@ -145,7 +146,7 @@ public class JsspProblem {
         ChainPlacement placement = null;
         for (int attempt = 0; attempt <= chain.size(); attempt++) {
             ChainPlacement attemptPlacement = placeChain(state, jobId, chain, startTime);
-            if (attemptPlacement.feasible()) {
+            if (attemptPlacement.valid()) {
                 placement = attemptPlacement;
                 break;
             }
@@ -158,7 +159,7 @@ public class JsspProblem {
             if (startTime == State.BLOCKED) { return null; }
 
             ChainPlacement fallback = placeChain(state, jobId, chain, startTime);
-            if (!fallback.feasible()) { return null; }
+            if (!fallback.valid()) { return null; }
             placement = fallback;
         }
 
@@ -195,7 +196,7 @@ public class JsspProblem {
                 int latestAdmissibleStart = startTimes[i - 1] + predecessor.maxDwellTime();
                 if (startTime > latestAdmissibleStart) {
                     int shift = startTime - latestAdmissibleStart;
-                    return ChainPlacement.infeasible(chainStart + shift);
+                    return ChainPlacement.invalid(chainStart + shift);
                 }
             }
 
@@ -205,7 +206,7 @@ public class JsspProblem {
             bathAvailableTime[bath] = endTimes[i];
             jobReady = endTimes[i];
         }
-        return ChainPlacement.feasible(baths, startTimes, endTimes);
+        return ChainPlacement.valid(baths, startTimes, endTimes);
     }
 
     private Transition commit(State state, int jobId, List<Operation> chain, ChainPlacement placement) {
@@ -255,12 +256,12 @@ public class JsspProblem {
         return new Transition(newState, scheduledOperations);
     }
 
-    private record ChainPlacement(boolean feasible, boolean blocked, int requiredStart, int[] baths, int[] startTimes, int[] endTimes) {
-        static ChainPlacement feasible(int[] baths, int[] startTimes, int[] endTimes) {
+    private record ChainPlacement(boolean valid, boolean blocked, int requiredStart, int[] baths, int[] startTimes, int[] endTimes) {
+        static ChainPlacement valid(int[] baths, int[] startTimes, int[] endTimes) {
             return new ChainPlacement(true, false, 0, baths, startTimes, endTimes);
         }
 
-        static ChainPlacement infeasible(int requiredStart) {
+        static ChainPlacement invalid(int requiredStart) {
             return new ChainPlacement(false, false, requiredStart, null, null, null);
         }
 

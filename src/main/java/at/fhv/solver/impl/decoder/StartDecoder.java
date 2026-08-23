@@ -6,8 +6,6 @@ import at.fhv.solver.ISearchAlgorithm;
 import at.fhv.solver.IStartDecoder;
 import at.fhv.solver.impl.tabu.MachineSequences;
 
-import java.util.Base64;
-
 public class StartDecoder implements IStartDecoder {
     private final ISearchAlgorithm constructive;
     private final IStartDecoder fallback;

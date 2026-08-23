@@ -6,6 +6,9 @@ import at.fhv.solver.impl.tabu.*;
 import java.util.ArrayList;
 import java.util.List;
 
+// N5 (Nowicki/Smutnicki) ergibt nicht viel Sinn im Blocking-Kontext, da die Randops nicht die einzigen sind, die den Makespan verberssern könnten
+// nur zum vergleichen hauptsächlich
+
 public class N5Neighbourhood implements INeighbourhood {
     @Override
     public List<Move> generate(ScheduleEvaluator.EvaluationResult evaluationResult, MachineSequences machineSequences) {
