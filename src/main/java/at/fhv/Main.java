@@ -65,14 +65,14 @@ public class Main {
         System.out.println("  [--time <ms>] wall clock budget per TABU run, 0 = use --noimp only");
         System.out.println("  [--kick <n>] non improving iterations before destroying, default 2");
         System.out.println("  [--start COLD|WARM] [--out <folder>]");
-        System.out.println("  [--heuristic MAKESPAN|NEXT-T-START|NEXT-T-MAX|LEXICOGRAPHIC] one or a list");
+        System.out.println("  [--heuristic MAKESPAN|NEXT-T-START|NEXT-T-MAX|COMBINED] one or a list");
         System.out.println("  Lists (1,5,20) and ranges (1-20) are allowed.");
         System.out.println();
         System.out.println("Examples:");
         System.out.println(" run --algo TABU --instance benchmarks/demoanlage.txt --seed 1-20");
         System.out.println("  run --algo BEAM --instance benchmarks/demoanlage.txt --beam 1,5,20,50,100");
         System.out.println("  run --algo BULB,BEAMSTACK --instance benchmarks/demoanlage.txt --beam 5,20,50");
-        System.out.println("  run --algo BEAM --instance benchmarks/demoanlage.txt --heuristic MAKESPAN,LEXICOGRAPHIC");
+        System.out.println("  run --algo BEAM --instance benchmarks/demoanlage.txt --heuristic MAKESPAN,COMBINED");
     }
 
     private static void runAll(String[] args) throws IOException {
