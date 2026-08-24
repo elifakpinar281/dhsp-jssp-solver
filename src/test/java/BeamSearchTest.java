@@ -3,7 +3,7 @@ import at.fhv.model.jssp.*;
 import at.fhv.solver.impl.beam.BeamSearch;
 import at.fhv.solver.validation.ScheduleValidator;
 import at.fhv.solver.validation.ValidationResult;
-import at.fhv.visualization.SearchStatistics;
+import at.fhv.stats.SearchStatistics;
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;

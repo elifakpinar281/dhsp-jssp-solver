@@ -5,7 +5,7 @@ import at.fhv.solver.ISearchAlgorithm;
 import at.fhv.evaluation.IHeuristic;
 import at.fhv.solver.Node;
 import at.fhv.solver.State;
-import at.fhv.visualization.SearchStatistics;
+import at.fhv.stats.SearchStatistics;
 
 import java.util.*;
 

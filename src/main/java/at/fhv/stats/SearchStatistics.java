@@ -1,4 +1,4 @@
-package at.fhv.visualization;
+package at.fhv.stats;
 
 import java.io.BufferedWriter;
 import java.io.FileWriter;

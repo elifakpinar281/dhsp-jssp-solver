@@ -9,12 +9,10 @@ import at.fhv.solver.State;
 public class NextTStartHeuristic implements IHeuristic {
     private final double PENALTY_BLOCKED;
     private JsspProblem jsspProblem;
-    private int restTime;
 
     public NextTStartHeuristic(JsspProblem jsspProblem) {
         this.jsspProblem = jsspProblem;
         PENALTY_BLOCKED = 1e9;
-        restTime = 0;
     }
 
     @Override
@@ -26,7 +24,7 @@ public class NextTStartHeuristic implements IHeuristic {
 
             if (nextIndex >= job.operations().size() ) { continue; }
             Operation nextOperation = job.operations().get(nextIndex);
-            int start = earliestStartOf(state, job.jobId(), nextIndex, nextOperation);
+            int start = earliestStartOf(state, job.jobId(), nextOperation);
             if (start == State.BLOCKED) { return PENALTY_BLOCKED; }
             total = total + start;
         }
@@ -34,15 +32,11 @@ public class NextTStartHeuristic implements IHeuristic {
         return total;
     }
 
-    private int earliestStartOf(State state, int jobId, int nextIndex, Operation nextOperation) {
+    private int earliestStartOf(State state, int jobId, Operation nextOperation) {
         int jobReady = state.jobAvailableTime()[jobId];
 
-        if (nextIndex > 0) {
-            jobReady = jobReady + restTime;
-        }
-
         int bathReady = jsspProblem.earliestBathTime(state, nextOperation.machineId());
-        if (bathReady == State.BLOCKED) { return State.BLOCKED; };
+        if (bathReady == State.BLOCKED) { return State.BLOCKED; }
 
         return Math.max(jobReady, bathReady);
     }

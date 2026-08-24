@@ -7,7 +7,7 @@ import at.fhv.model.jssp.ScheduledOperation;
 import at.fhv.solver.ISearchAlgorithm;
 import at.fhv.solver.State;
 import at.fhv.model.jssp.*;
-import at.fhv.visualization.SearchStatistics;
+import at.fhv.stats.SearchStatistics;
 
 import java.util.*;
 
