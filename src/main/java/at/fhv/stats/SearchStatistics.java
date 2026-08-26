@@ -15,7 +15,7 @@ public class SearchStatistics {
     private int lastFrontier = 0;
     private int lastMaxDepth = 0;
 
-    private long lastSampledExpansions = -1;
+    private long lastSampledExpansions = -1; // Noch keine
 
     private BufferedWriter sampleWriter;
     private boolean headerWritten = false;

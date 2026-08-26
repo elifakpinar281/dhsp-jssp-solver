@@ -10,6 +10,7 @@ import java.util.*;
 public class DwellStartDecoder implements IStartDecoder {
     private final Random random;
     private final double restricted;
+    private static final int MAX_ATTEMPTS = 20;
 
     public DwellStartDecoder(Random random) {
         this(random, 0.34);
@@ -19,10 +20,6 @@ public class DwellStartDecoder implements IStartDecoder {
         this.random = random;
         this.restricted = restricted;
     }
-
-    private record Candidate(Operation operation, Transition transition, int completion) {}
-
-    private static final int MAX_ATTEMPTS = 20;
 
     @Override
     public MachineSequences decode(JsspProblem jsspProblem) {

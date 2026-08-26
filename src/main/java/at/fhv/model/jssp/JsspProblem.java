@@ -17,9 +17,6 @@ public class JsspProblem {
     private final int[] bathOffset;
     private final int totalBaths;
 
-    private final Map<Operation, Operation> jobPredecessor;
-    private final Map<Operation, Operation> jobSuccessor;
-
     public JsspProblem(List<Machine> machines, List<Job> jobs) {
         this(machines, jobs, false);
     }
@@ -42,16 +39,6 @@ public class JsspProblem {
             offset += capacity[machineId];
         }
         this.totalBaths = offset;
-
-        this.jobPredecessor = new HashMap<>();
-        this.jobSuccessor = new HashMap<>();
-        for (Job job : jobs) {
-            List<Operation> operations = job.operations();
-            for (int i = 0; i < operations.size(); i++) {
-                if (i > 0) { jobPredecessor.put(operations.get(i), operations.get(i - 1)); }
-                if (i < operations.size() - 1) { jobSuccessor.put(operations.get(i), operations.get(i + 1)); }
-            }
-        }
     }
 
     public boolean isBlocking() {
@@ -84,7 +71,7 @@ public class JsspProblem {
         int best = State.NO_BATH;
 
         for (int bath = bathOffset[machineId]; bath < bathOffset[machineId] + capacity[machineId]; bath++) {
-            if (bathAvailableTime[bath] == State.BLOCKED) { continue; }
+            if (bathAvailableTime[bath] == State.BLOCKED) { continue; } // blockierte mal überspringej
             if (best == State.NO_BATH || bathAvailableTime[bath] < bathAvailableTime[best]) {
                 best = bath;
             }
