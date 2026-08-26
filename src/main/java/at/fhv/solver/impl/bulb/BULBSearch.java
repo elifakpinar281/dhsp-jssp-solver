@@ -44,7 +44,7 @@ public class BULBSearch implements ISearchAlgorithm {
         this.foundGoal = null;
         statistics.setTotalOperations(countTotalOperations(jsspProblem));
 
-        State initialState = createInitialState(jsspProblem);
+        State initialState = jsspProblem.createInitialState(jsspProblem);
         BULBNode root = new BULBNode(initialState, null, null, heuristic.evaluate(initialState), 0 );
         hashtable.clear();
         hashtable.put(initialState, root);
@@ -197,15 +197,6 @@ public class BULBSearch implements ISearchAlgorithm {
         c = Arrays.compare(a.bathAvailableTime(), b.bathAvailableTime());
         if (c != 0) return c;
         return Arrays.compare(a.jobBath(), b.jobBath());
-    }
-
-    private State createInitialState(JsspProblem jsspProblem) {
-        int[] nextOperation = new int[jsspProblem.getJobs().size()];
-        int[] bathAvailableTime = new int[jsspProblem.totalBaths()];
-        int[] jobAvailableTime = new int[jsspProblem.getJobs().size()];
-        int[] jobBath = new int[jsspProblem.getJobs().size()];
-        Arrays.fill(jobBath, State.NO_BATH);
-        return new State(nextOperation, bathAvailableTime, jobAvailableTime, jobBath);
     }
 
     private List<ScheduledOperation> buildSchedule(BULBNode goal) {

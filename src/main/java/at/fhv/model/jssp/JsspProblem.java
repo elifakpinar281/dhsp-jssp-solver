@@ -2,10 +2,7 @@ package at.fhv.model.jssp;
 
 import at.fhv.solver.State;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 public class JsspProblem {
     private final List<Machine> machines;
@@ -255,6 +252,15 @@ public class JsspProblem {
         static ChainPlacement blockedByCarrier() {
             return new ChainPlacement(false, true, 0, null, null, null);
         }
+    }
+
+    public State createInitialState(JsspProblem problem) {
+        int[] nextOperation = new int[problem.getJobs().size()];
+        int[] bathAvailableTime = new int[problem.totalBaths()];
+        int[] jobAvailableTime = new int[problem.getJobs().size()];
+        int[] jobBath = new int[problem.getJobs().size()];
+        Arrays.fill(jobBath, State.NO_BATH);
+        return new State(nextOperation, bathAvailableTime, jobAvailableTime, jobBath);
     }
 
 

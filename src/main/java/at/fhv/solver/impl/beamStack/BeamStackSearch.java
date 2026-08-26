@@ -40,7 +40,7 @@ public class BeamStackSearch implements ISearchAlgorithm {
         this.maxDepthReached = 0;
         searchStatistics.setTotalOperations(countTotalOperations(jsspProblem));
 
-        State initialState = createInitialState(jsspProblem);
+        State initialState = jsspProblem.createInitialState(jsspProblem);
         BeamStackNode root = new BeamStackNode(initialState, null, null, lowerBound(initialState), 0);
         List<Range> items = new ArrayList<>();
         items.add(new Range(0, INF));
@@ -228,15 +228,6 @@ public class BeamStackSearch implements ISearchAlgorithm {
         c = Arrays.compare(a.bathAvailableTime(), b.bathAvailableTime());
         if (c != 0) { return c; }
         return Arrays.compare(a.jobBath(), b.jobBath());
-    }
-
-    private State createInitialState(JsspProblem jsspProblem) {
-        int[] nextOperation = new int[jsspProblem.getJobs().size()];
-        int[] bathAvailableTime = new int[jsspProblem.totalBaths()];
-        int[] jobAvailableTime = new int[jsspProblem.getJobs().size()];
-        int[] jobBath = new int[jsspProblem.getJobs().size()];
-        Arrays.fill(jobBath, State.NO_BATH);
-        return new State(nextOperation, bathAvailableTime, jobAvailableTime, jobBath);
     }
 
     private List<ScheduledOperation> buildSchedule(BeamStackNode goal) {

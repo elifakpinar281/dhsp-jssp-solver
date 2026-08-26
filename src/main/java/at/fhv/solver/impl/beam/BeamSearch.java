@@ -22,7 +22,7 @@ public class BeamSearch implements ISearchAlgorithm {
 
     @Override
     public Schedule solve(JsspProblem jsspProblem) {
-        State initialState = createInitialState(jsspProblem);
+        State initialState = jsspProblem.createInitialState(jsspProblem);
         double heuristicValue = heuristic.evaluate(initialState);
         Node initialNode = new Node(initialState, null, heuristicValue, null);
 
@@ -82,15 +82,6 @@ public class BeamSearch implements ISearchAlgorithm {
             makespan = Math.max(makespan, available);
         }
         return makespan;
-    }
-
-    private State createInitialState(JsspProblem jsspProblem) {
-        int[] nextOperation = new int[jsspProblem.getJobs().size()];
-        int[] bathAvailableTime = new int[jsspProblem.totalBaths()];
-        int[] jobAvailableTime = new int[jsspProblem.getJobs().size()];
-        int[] jobBath = new int[jsspProblem.getJobs().size()];
-        Arrays.fill(jobBath, State.NO_BATH);
-        return new State(nextOperation, bathAvailableTime, jobAvailableTime, jobBath);
     }
 
     private List<Node> expand(Node node, JsspProblem jsspProblem) {

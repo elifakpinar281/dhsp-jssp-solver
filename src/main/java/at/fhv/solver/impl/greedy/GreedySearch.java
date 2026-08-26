@@ -28,7 +28,7 @@ public class GreedySearch implements ISearchAlgorithm {
 
     @Override
     public Schedule solve(JsspProblem jsspProblem) {
-        State initialState = createInitialState(jsspProblem);
+        State initialState = jsspProblem.createInitialState(jsspProblem);
         double heuristicValue = heuristic.evaluate(initialState);
         Node initialNode = new Node(initialState, null, heuristicValue, null);
 
@@ -99,15 +99,6 @@ public class GreedySearch implements ISearchAlgorithm {
             current = best;
         }
         return new Schedule(buildSchedule(current));
-    }
-
-    private State createInitialState(JsspProblem problem) {
-        int[] nextOperation = new int[problem.getJobs().size()];
-        int[] bathAvailableTime = new int[problem.totalBaths()];
-        int[] jobAvailableTime = new int[problem.getJobs().size()];
-        int[] jobBath = new int[problem.getJobs().size()];
-        Arrays.fill(jobBath, State.NO_BATH);
-        return new State(nextOperation, bathAvailableTime, jobAvailableTime, jobBath);
     }
 
     private List<Node> expand(Node node, JsspProblem problem) {

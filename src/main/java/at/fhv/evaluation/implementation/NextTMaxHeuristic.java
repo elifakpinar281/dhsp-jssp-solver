@@ -7,6 +7,7 @@ import at.fhv.model.jssp.JsspProblem;
 import at.fhv.solver.State;
 
 // kleiner Slack bedeutet hoher Wert (dringender)
+// Es werden enge dwell times gemieden ist das okay? Sonst wären die einfach schlechter bewertet
 public class NextTMaxHeuristic implements IHeuristic {
     private static final int WEIGHT = 1000;
 
