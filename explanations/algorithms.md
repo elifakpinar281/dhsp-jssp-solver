@@ -36,3 +36,92 @@ Wenn ich zu viel expandiert habe kann ich aufhören und bestGoal zurückgeben.
 Am Ende wären alle Ebenen abgearbeitet -> bestGoal zurückgeben
 
 Heuristik gibt an, welche Nodes "überleben"
+
+
+## BULB
+Man darf eine begrenzte Anzahl Man von der besten Wahl abweichen und eine Alternative probieren.
+maxDiscrepancies legt fest, wie oft das erlaubt ist.
+
+Slice ist ein Stück aus der Liste
+Also wenn ich A B C überprüfe dann wäre das eine Slice. 
+D E F wäre eine andere Slice
+
+Discrepancy heißt jetzt, dass ich eine Slice nehme, die nicht die beste ist.
+
+in solve() wird mehr Backtracking erlaubt.
+- Anlauf mit discrepancies = 0 -> reiner Beam und es ist keine Abweichung erlaubt
+- Findet dies kein Ziel, dann Anlauf mit 1 -> Beam, der einmal abweichen darf
+- Dann bis maxDiscrepancies
+
+Jeder Anlauf fängt bei null an (hashtable.clear())
+Man sucht absichtlich mehrmals. 
+Sobald ein Ablauf ein Ziel findet, wird zurückgegeben.
+
+-1.0 ... normaler Slice - es wird einfach weiter in die depth gesucht
+1.0 ... GOAL_FOUND
++ unendlich ... NO_PATH also Sackgasse bzw. Speicherlimit erreicht
+value >= 0 ... entweder Ziel oder Sackgasse - also ein Endzustand für den Zweig
+pathLength < NO_PATH ... ein Ziel wurde erreicht
+
+BULBNode hat zusätzlich zum normalen Node noch eine dDepth - eine Ebenen Tiefe also wie viele Expansions depths von dem Startnode
+BULBSliceResult ist Ergebnis eines "Slice Versuchs" -> slice sind die gewählten KNoten, value ist idk, index idk
+
+hashtable -> schon gesehene States werden nicht doppelt angesehen & auch die aktive Suche wird da gespeichert - beim Backtracken werden Slices rausgenommen durch removeFromTable. 
+Ab Index wird durch die Sucessors gegangen & bis zu k neue Nodes "aufgenommen" - die in die hashtable gespeichert werden. Wenn die hashtable zu groß ist (maxStored) - dann wird dieser Slice entfernt und NO_PATH gesetzt. Zurückgegeben wird dann Slice, Value -1.0 und der neue index
+Der Index gibt an, wo die nächste Slice beginnt
+
+
+BULBProbe(depth, discrepancies) gibt an, welcher Slice als Nächstes untersucht wird
+Wenn ein Goal gefunden ist oder zB Sackgasse gibt dann wird es durch nextSlice() fertig - ERgebnis wird einfach zurückgegeben (result.value())
+Wenn discrepancies gleich 0 ist, dann gibt es keine Abweichungen mehr, ich nehme dann die beste Slice und habe dann sozusagen eine normale Beam Suche.
+Wenn discrepancies über 0 ist, dann habe ich noch Abweichungen. Kann also nochmal eine andere Slice ausprobieren.
+Die beste Slice wird dann einfach kurz entfernt (removeFromTable), eine Alternative wird untersucht, Discrepancy-Zahl wird um 1 reduziert. Und weiter. Index geht immer weiter zu den nächsten Slices.
+Wenn keine Alternative geht, dann wird die beste Slice genommen & discrepancies gesetzt (keine Abweichung wenn ich die beste Slice wieder nehme).
+
+compareStates vergleicht States & dient nur als Tie-Breaker beim Sortieren
+
+
+## Beamstack
+Beamstack ist vollständig und findet garantiert die optimale Lösung, wenn man ihn lange genug laufen lässt.
+Beam Search mit einer "Stack", der sich merkt, was weggeschnitten wurde - kann dann zurückgehen/backtracken
+Beim "Wegwerfen" bzw pruning wird der f-Wert gemerkt - dieser sagt, ab wann es abgeschnitten worden ist.
+In einem späteren Durchlauf (Sweep) kann es dann die pruned Nodes nachholen.
+
+upperBound -> mein niedrigstes Makespan
+f-Wert -> die untere Schranke wenn ich von einem Node aus gehe. wenn es f > upperBound schon ist dann wird dieser Node nicht weiter untersucht
+(f wird nie überschätzt -> deshalb verliert man durch das Wegwerfen nie die optimale Lösung)
+
+Die funktion f kommt eigentlich aus max(jobBound, machineBound) - beide dieser Bounds sagen, wie groß der Makespan mind. sein muss
+Grund jobBound ->
+Job 1 hat bereits 50 (aktuelle Zeit)
+Job 1 muss noch 20 + 30 + 40
+Also jobBound = 50 + 20 + 30 + 40 = 140
+Dieser Job kann frühestens bei 140 fertig sein, also dann der gesamte Plan nicht vor 140 ist
+Wir nehmen hier irgendwie immer den langsamsten Job, da das ganze erst fertig ist, wann alle Jobs es sind
+
+Grund machineBound ->
+Pro Maschine wird die restliche Last (Summe der Restzeiten aller Ops auf dieser Maschine) gesammelt.
+Wenn eine Maschine capacity Bäder hat, braucht sie mind. ca. Last/capacity Zeit -> auch eine Untergrenze für den Makespan.
+Es wird die Maschine mit der höchsten Untergrenze genommen.
+
+Range
+Range sagt, ab welchen f Werten mich Nodes noch interessieren (nur Nodes mit fmin <= f < fmax kommen auf dieser Ebene durch)
+So kann die Suche nach und nach immer mehr vom Suchraum abdecken
+items = List<Range> -> speichert für jede Ebene die Range = der eigentliche "Beam Stack" (das Gedächtnis)
+Ein Sweep ist ein Durchlauf durch den Baum mit den aktuell gespeicherten Ranges. Es macht Beam Search und speichert die pruned Nodes (über fmax), damit sie später in einem Sweep untersucht werden können.
+
+pruneLayer -> die Knoten werden nach f sortiert und die besten kommen zuerst
+fmax -> wenn ich in einem Sweep alles bis f<120 untersucht habe weiß ich dann das ab 120 der Bereich ist, den ich noch nicht untersucht habe
+(fmax = kleinster f-Wert den ich gerade weggeworfen habe)
+
+Nach jedem Sweep werden die Ranges in items verschoben, damit der nächste Sweep ein anderes f-Band anschaut
+- Bessere? -> upperBound updaten, bestGoal merken. Ranges die ganz über der neuen Schranke liegen wegwerfen, oberstes Fenster auf das nächste Band schieben (fmin = altes fmax, fmax = upperBound).
+- Nichts Besseres? -> leere Fenster vom Stack abräumen (backtracken nach oben), oberstes Fenster auf sein nächstes Band schieben.
+
+Ende wenn items komplett leer ist -> jeder f-Bereich ist abgedeckt -> es kann nichts Besseres mehr geben
+
+
+
+
+
+
