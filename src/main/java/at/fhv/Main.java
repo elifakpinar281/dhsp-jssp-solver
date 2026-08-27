@@ -5,6 +5,7 @@ import at.fhv.evaluation.Slack;
 import at.fhv.evaluation.implementation.*;
 import at.fhv.experiment.RunLog;
 import at.fhv.experiment.RunLogWriter;
+import at.fhv.model.exception.AppException;
 import at.fhv.model.jssp.JsspProblem;
 import at.fhv.model.jssp.Schedule;
 import at.fhv.solver.ISearchAlgorithm;
@@ -57,7 +58,19 @@ public class Main {
     private static final int TABU_MAX_RESTARTS = 100;
     private static final DateTimeFormatter STAMP = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss");
 
-    public static void main(String[] args) throws IOException {
+    public static void main(String[] args) {
+        try {
+            run(args);
+        } catch (AppException exception) {
+            System.err.println("[" + exception.getErrorCode() + "] " + exception.getMessage());
+            System.exit(1);
+        } catch (IOException exception) {
+            System.err.println("[IO_ERROR] " + exception.getMessage());
+            System.exit(2);
+        }
+    }
+
+    private static void run(String[] args) throws IOException {
         List<String> instances = options(args, "--instance", "benchmarks/demoanlage.txt");
         List<String> algorithms = options(args, "--algo", "GREEDY,BEAM,TABU");
         Path outFolder = Path.of(option(args, "--out", "runs"));

@@ -23,6 +23,11 @@ public class MemorySampler implements Runnable {
         }
     }
 
+    public void start() {
+        thread = new Thread(this, "memory-sampler");
+        thread.start();
+    }
+
     public void shutdown() {
         running = false;
         if (thread != null) { thread.interrupt(); }

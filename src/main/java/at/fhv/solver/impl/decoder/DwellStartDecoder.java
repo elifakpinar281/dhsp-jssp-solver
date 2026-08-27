@@ -1,5 +1,6 @@
 package at.fhv.solver.impl.decoder;
 
+import at.fhv.model.exception.SolveFailedException;
 import at.fhv.model.jssp.*;
 import at.fhv.solver.IStartDecoder;
 import at.fhv.solver.State;
@@ -27,7 +28,7 @@ public class DwellStartDecoder implements IStartDecoder {
             MachineSequences sequences = decodeOnce(jsspProblem);
             if (sequences != null) { return sequences; }
         }
-        throw new IllegalStateException("No valid start solution found after " + MAX_ATTEMPTS + " attempts");
+        throw new SolveFailedException("No valid start solution found after " + MAX_ATTEMPTS + " attempts");
     }
 
     private MachineSequences decodeOnce(JsspProblem jsspProblem) {

@@ -49,8 +49,6 @@ Wenn ich immer den besten Kandidaten nehmen würde, bekomme ich jedes Mal die gl
 Es wird daher durch den restricted-Wert zufällig innerhalb der guten Kandidaten ausgewählt
 
 Exception in custom one
-createInitialState() einmal bauen
-
 
 
 ## StartDecoder

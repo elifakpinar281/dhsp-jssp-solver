@@ -1,11 +1,8 @@
 
 ## MemorySampler
 Gibt die Space Complexity an (also Peak Memory Usage). 
-Die Klasse extendet "Thread" und kann daher mit start() in eigenem Thread laufen.
 start() startet den Sampler & mit run() würde es im Hauptthread laufen. 
 Meine Intention ist es, dass der Sampler in einem eigenen Thread läuft, da es sonst evtl zu Überschneidungen mit dem Hauptthread kommen könnte.
-
-Vielleicht in implements Runnable umändern?
 Alle 5 Sekunden wird die aktuelle Memory Usage abgefragt und in einer Liste gespeichert.
 
 volatile = sorgt dafür, dass Threads immer die aktuelle Version der Variable sehen
@@ -51,5 +48,4 @@ Kontextabhängig zB expanded reached & maxDepth ergeben nicht so viel Sinn für 
 
 
 ## RunLogWriter
-Schreibt ein RunLog als JSON-Datei auf die Platte
-Jackson JSON Library? Gson?
+Mit Gson
