@@ -121,7 +121,81 @@ Nach jedem Sweep werden die Ranges in items verschoben, damit der nächste Sweep
 Ende wenn items komplett leer ist -> jeder f-Bereich ist abgedeckt -> es kann nichts Besseres mehr geben
 
 
+## Tabu Search
+Ein Move ist eine kleine Änderung an der Reihenfolge der Operationen innerhalb eines Bades
+SWAP -> zwei Operationen tauschen ihre Plätze
+MOVE_AFTEr -> eine Operation wird hinter eine andere verschoben
+MOVE_BEFORE -> eine Operation wird vor eine andere verschoben
+MoveAttribute wird in der Tabu Liste gespeichert, damit die Tabu Search nicht direkt den gleichen Move wieder rückgängig macht.
+applied(Move move) nimmt einen Move und gibt eine neue MachineSequences zurück. Das davor bleibt unverändert
+stride -> wie viel Plätze überspringt man, um den zeitlich relevanten Neighbour zu finden (hat mit der Kapazität zutun)
+fromSchedule() -> aus einem Schedule werden die Reihenfolgen rekonstruiert, indem pro Bad nach Startzeiten sortiert wird
 
+ScheduleEvaluator gibt an, ob eine MachineSequence valid ist und welchen Makespan sie hat
+Jede Operation bekommt hier einen Index 0 ... n-1, - dann wie gewohnt processingTime maxDwellTime jobPredecessor jobSuccessor
+fastIndexUsable + jobOffset helper - nummeriert Job Ids und Operation Ids - dann kann man den Index direkt ausrechnen
 
+solveWithLags
+Aus der Reihenfolge der Operationen werden die frühesten Startzeiten berechnet.
+Dafür wird dann ein Graph aufgebaut. Jede Operation ist eine Node und Kante ist wie eine zeitliche Regel
+Zu berücksichtigen sind
+- Die nächste Operatione eines Jobs kann erst starten, wenn die vorherige fertig ist
+- Ein Tank kann ein Bad erst nutzen, wenn der vorherige Tank dieses verlassen hat
+- Ein Tank darf nicht länge als erlaubt auf die nächste Operation warten (Verweilzeit)
+- Ein Tank kann ein Bad nicht verlassen, solange der nächste Schritt/Operation noch nicht möglich ist
 
+Die frühesten Startzeiten werden angepasst, bis alle Regeln erfüllt sind. Die Verweilzeit ist dabei eine negative Kante.
+Wenn die Regeln irgendwie nicht erfüllt werden können, wird null zurückgegeebn
+Wenn es valid ist, wird aus den Start- und Bearbeitungszeiten der Makespan berechnet
 
+evaluateResult -> gibt nur zurück ob die Lösung valid ist und wie groß Makespan ist. Schnell.
+evaluate -> berechnet zusätzlich Startzeiten und critcal path
+
+Critical Path ist die chain von Operationen, die bestimmt, wann der ganze Produktionsablauf fertig wird. Man startet bei der Op, die als Letztes fertig wird und geht dann zurück (also wirklich zurückgehen). Es werden dabei auch die Regeln berücksichtigt
+Wenn man den Makespan verkürzen will, muss man hauptsächlich die kritischen Ops und deren Reihenfolge verändern
+
+Neigbourhoods
+Eine Neighbourhood erzeugt aus der aktuellen Lösung viele mögliche Moves, die ausprobiert werden können.
+Es wird der critical path betrachtet und in critical blocks aufgeteilt. Ein Block besteht aus aufeinanderfolgenden Operationen, die das gleiche Bad benutzen.
+Dort kann eine andere Reihenfolge möglicherweise den makespan verbessern
+
+N5 tauscht Operationen hauptsächlich an den Rändern eines Blocks
+N6 verschiebt Operationen an den Anfang oder das Ende eines Blocks und erzeugt dadurch mehr mögliche Moves.
+Stride berücksichtigt auch Nachbarn unter Berücksichtigung der capacity und erzeugt daraus mögliche Swaps
+Seen set verhindert doppelte Moves
+
+Tabu verhindert, dass die Tabu Search immer die gleiche Änderung rückgängig macht und dadurch zwischen den gleichen Lösungen hin und herspringt
+Tabulist speichert für jeden Move, bis zu welcher Iteration er gesperrt ist
+
+Tenure bestimmt wie lange ein gerade ausgeführter Move tabu bleibt
+Wenn zwei Operationen getauscht wurden, soll die Suche sie nicht sofort wieder zurücktauschen
+Stattdessen werden andere Reihenfolgen und Bereiche erkündigt
+Hin und hersprünge ist da ein Problem leider
+
+große Tenure hingegen kann dazu führen dass gute Moves unnötig lange blockiert werden
+dynamicTenure verändert die tenure leicht, damit die Suche nicht immer bei gleichen "Mustern" festhängt
+
+solve()
+- Zuerst wird eine Startlösung erzeugt. 
+- Neighbours werden erzeugt
+- Neighbours werden bewertet
+- Es wird der beste erlaubte Move ausgewählt
+- Dieser Move wird angewendet
+- Es wird geschaut ob es eine neue Lösung ist
+- Dann wiederholen
+
+Suche endet entweder wenn Zeitlimit erreicht oder wenn trotz mehrerer Versuche keine Verbesserung mehr gefunden wird
+
+step() ist ein Suchschritt
+- Nachbarn erzeugen - mögliche Änderungen an der aktuellen Reihenfolge
+- Nachbarn bewerten - für jeden Move wird geprüft ob Lösung valid, wie groß Makespan, ist Move tabu?
+- Aspiration - Ein tabu move darf trotzdem verwendet werden, wenn er eine neue beste Lösung erzeugt
+- Move auswählen - der beste erlaubte Neighbour wird genommen, darf auch schlechter als die aktuelle Lösung sein. Suche kann dadurch kurz schlechter werden, um später eine besseren Bereich zu erreichen
+- Move anwenden - der ausgewählte Move wird applied, auf die tabu lsit gesetzt und gespeichert
+
+Die beste bisher gefundene Lösung wird separat gespeichert und geht nicht verloren
+remember() -> prüft ob die aktuelle Lösung valid und besser als die bisher beste ist. Wenn ja wird sie als neue beste Lösung gespeichert und der Zähler für ausbleibende Verbesserungen zurückgesetzt
+
+destroy()/kick() -> Wenn die Suche zu lange keine Verbesserung findet, wird sie aufgemischt. Bei full restart wird eine komplett neue Startlösung erzeugt und bei kick startet man von der bisher besten Lösung und macht einige valid Änderungen
+Danach wird die Tabu list geleert und die Suche geht weiter
+vielleicht überprüfen ob dies auch wirklich genutzt wird dann
