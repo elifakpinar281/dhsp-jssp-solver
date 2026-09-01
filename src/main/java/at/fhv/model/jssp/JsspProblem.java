@@ -1,10 +1,11 @@
 package at.fhv.model.jssp;
 
+import at.fhv.solver.SchedulingProblem;
 import at.fhv.solver.State;
 
 import java.util.*;
 
-public class JsspProblem {
+public class JsspProblem implements SchedulingProblem {
     private final List<Machine> machines;
     private final List<Job> jobs;
 
@@ -261,6 +262,32 @@ public class JsspProblem {
         int[] jobBath = new int[problem.getJobs().size()];
         Arrays.fill(jobBath, State.NO_BATH);
         return new State(nextOperation, bathAvailableTime, jobAvailableTime, jobBath);
+    }
+
+    @Override
+    public State createInitialState() {
+        return createInitialState(this);
+    }
+
+    // Ein Übergang pro verfügbarer Operation
+    @Override
+    public List<Transition> expand(State state) {
+        List<Transition> transitions = new ArrayList<>();
+        for (Operation operation : getAvailableOperations(state)) {
+            Transition transition = applyOperation(state, operation);
+            if (transition == null) { continue; }
+            transitions.add(transition);
+        }
+        return transitions;
+    }
+
+    @Override
+    public int totalOperations() {
+        int total = 0;
+        for (Job job : jobs) {
+            total = total + job.operations().size();
+        }
+        return total;
     }
 
 

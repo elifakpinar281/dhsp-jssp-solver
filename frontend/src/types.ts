@@ -13,6 +13,7 @@ export interface RunLog {
   instance: string;
   instanceKey: string;
   algorithm: string;
+  mode?: "JSSP" | "FJSSP" | string;
   params: Record<string, number | string | boolean>;
   jobCount: number;
   machineCount: number;

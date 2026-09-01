@@ -126,11 +126,14 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="app">
+    <div className={selectedRun !== null && selectedRun.mode === "FJSSP" ? "app fjssp" : "app"}>
       <header className="app-header">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src="/logo.svg" alt="Logo" className="logo-img" />
         <h1>Optimization Dashboard</h1>
+        {selectedRun !== null && selectedRun.mode === "FJSSP" ? (
+          <span className="mode-badge">FJSSP</span>
+        ) : null}
       </header>
 
       {loading ? <div className="empty">Loading runs…</div> : null}

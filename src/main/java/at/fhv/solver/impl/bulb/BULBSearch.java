@@ -3,6 +3,7 @@ package at.fhv.solver.impl.bulb;
 import at.fhv.evaluation.IHeuristic;
 import at.fhv.model.jssp.*;
 import at.fhv.solver.ISearchAlgorithm;
+import at.fhv.solver.SchedulingProblem;
 import at.fhv.solver.State;
 import at.fhv.stats.SearchStatistics;
 
@@ -37,7 +38,10 @@ public class BULBSearch implements ISearchAlgorithm {
     }
 
     @Override
-    public Schedule solve(JsspProblem jsspProblem) {
+    public Schedule solve(SchedulingProblem problem) {
+        if (!(problem instanceof JsspProblem jsspProblem)) {
+            throw new UnsupportedOperationException("BULBSearch supports only JSSP mode");
+        }
         this.jsspProblem = jsspProblem;
         this.expanded = 0;
         this.maxDepthReached = 0;

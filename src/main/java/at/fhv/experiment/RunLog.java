@@ -12,6 +12,7 @@ public record RunLog(
         String instance,
         String instanceKey,
         String algorithm,
+        String problem,
         Map<String, Object> params,
         int jobCount,
         int machineCount,

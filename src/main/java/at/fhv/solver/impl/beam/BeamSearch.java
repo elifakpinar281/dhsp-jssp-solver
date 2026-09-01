@@ -3,6 +3,7 @@ package at.fhv.solver.impl.beam;
 import at.fhv.evaluation.IHeuristic;
 import at.fhv.model.jssp.*;
 import at.fhv.solver.ISearchAlgorithm;
+import at.fhv.solver.SchedulingProblem;
 import at.fhv.solver.Node;
 import at.fhv.solver.State;
 import at.fhv.stats.SearchStatistics;
@@ -21,8 +22,8 @@ public class BeamSearch implements ISearchAlgorithm {
     }
 
     @Override
-    public Schedule solve(JsspProblem jsspProblem) {
-        State initialState = jsspProblem.createInitialState(jsspProblem);
+    public Schedule solve(SchedulingProblem problem) {
+        State initialState = problem.createInitialState();
         double heuristicValue = heuristic.evaluate(initialState);
         Node initialNode = new Node(initialState, null, heuristicValue, null);
 
@@ -32,7 +33,7 @@ public class BeamSearch implements ISearchAlgorithm {
         Set<State> visited = new HashSet<>();
         visited.add(initialState);
 
-        statistics.setTotalOperations(countTotalOperations(jsspProblem));
+        statistics.setTotalOperations(problem.totalOperations());
         long expanded = 0;
         int maxDepth = 0;
 
@@ -49,7 +50,7 @@ public class BeamSearch implements ISearchAlgorithm {
             List<Node> beam = level.subList(0, Math.min(beamWidth, level.size()));
 
             for (Node node : beam) {
-                if (jsspProblem.isGoal(node.state())) {
+                if (problem.isGoal(node.state())) {
                     if (bestGoal == null || makespanOf(node) < makespanOf(bestGoal)) {
                         bestGoal = node;
                     }
@@ -57,7 +58,7 @@ public class BeamSearch implements ISearchAlgorithm {
                 }
                 expanded++;
 
-                for (Node child : expand(node, jsspProblem)) {
+                for (Node child : expand(node, problem)) {
                     State childState = child.state();
                     if (visited.contains(childState)) { continue; }
                     visited.add(childState);
@@ -84,11 +85,9 @@ public class BeamSearch implements ISearchAlgorithm {
         return makespan;
     }
 
-    private List<Node> expand(Node node, JsspProblem jsspProblem) {
+    private List<Node> expand(Node node, SchedulingProblem problem) {
         List<Node> children = new ArrayList<>();
-        for (Operation operation : jsspProblem.getAvailableOperations(node.state())) {
-            Transition transition = jsspProblem.applyOperation(node.state(), operation);
-            if (transition == null) { continue; }
+        for (Transition transition : problem.expand(node.state())) {
             double heuristicValue = heuristic.evaluate(transition.state());
             children.add(new Node(transition.state(), node, heuristicValue, transition.scheduledOperations()));
         }
@@ -115,13 +114,5 @@ public class BeamSearch implements ISearchAlgorithm {
         }
         Collections.reverse(schedule);
         return schedule;
-    }
-
-    private int countTotalOperations(JsspProblem jsspProblem) {
-        int total = 0;
-        for (Job job : jsspProblem.getJobs()) {
-            total = total + job.operations().size();
-        }
-        return total;
     }
 }

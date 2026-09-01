@@ -31,6 +31,7 @@ export function toRunLog(raw: unknown, fallbackId: string): RunLog | null {
         instance: typeof value.instance === "string" ? value.instance : "",
         instanceKey: typeof value.instanceKey === "string" ? value.instanceKey : "",
         algorithm: value.algorithm,
+        mode: typeof value.mode === "string" ? value.mode : undefined,
         params: (value.params as Record<string, number | string | boolean>) ?? {},
         jobCount: typeof value.jobCount === "number" ? value.jobCount : 0,
         machineCount: typeof value.machineCount === "number" ? value.machineCount : 0,

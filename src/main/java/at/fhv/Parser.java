@@ -1,6 +1,11 @@
 package at.fhv;
 
 import at.fhv.model.exception.InvalidInstanceException;
+
+import at.fhv.model.fjssp.FjsspJob;
+import at.fhv.model.fjssp.FjsspOperation;
+import at.fhv.model.fjssp.FjsspProblem;
+import at.fhv.model.fjssp.MachineOption;
 import at.fhv.model.jssp.Job;
 import at.fhv.model.jssp.JsspProblem;
 import at.fhv.model.jssp.Machine;
@@ -24,6 +29,56 @@ public class Parser {
             }
             return parseClassicFormat(scanner);
         }
+    }
+
+    public FjsspProblem parseFjssp(String filePath) throws IOException {
+        String content = stripComments(filePath);
+        try (Scanner scanner = new Scanner(content)) {
+            if (!scanner.hasNext("(?i)JOBS")) {
+                throw new InvalidInstanceException("FJSSP mode requires the keyword instance format (JOBS/MACHINES/CAPACITIES)");
+            }
+            return parseKeywordFormatFjssp(scanner);
+        }
+    }
+
+    private FjsspProblem parseKeywordFormatFjssp(Scanner scanner) {
+        expectKeyword(scanner, "JOBS");
+        int jobCount = nextInt(scanner, "jobCount");
+        expectKeyword(scanner, "MACHINES");
+        int machineCount = nextInt(scanner, "machineCount");
+
+        int[] capacities = parseCapacities(scanner, machineCount);
+        boolean blocking = parseBlocking(scanner);
+
+        int[] offsets = new int[machineCount];
+        int offset = 0;
+        for (int station = 0; station < machineCount; station++) {
+            offsets[station] = offset;
+            offset += capacities[station];
+        }
+
+        List<FjsspJob> jobs = new ArrayList<>();
+
+        for (int jobId = 0; jobId < jobCount; jobId++) {
+            int opCount = nextInt(scanner, "opCount");
+            List<FjsspOperation> operations = new ArrayList<>();
+
+            for (int operationId = 0; operationId < opCount; operationId++) {
+                int stationId = nextInt(scanner, "machineId");
+                int fullTime = nextInt(scanner, "processingTime");
+                int maxDwellTime = nextMaxDwell(scanner, "maxDwellTime");
+                validateOperation(jobId, stationId, fullTime, machineCount);
+                validateDwell(jobId, operationId, fullTime, maxDwellTime);
+
+                List<MachineOption> options = new ArrayList<>();
+                for (int bath = offsets[stationId]; bath < offsets[stationId] + capacities[stationId]; bath++) {
+                    options.add(new MachineOption(bath, fullTime));
+                }
+                operations.add(new FjsspOperation(operationId, jobId, stationId, options, maxDwellTime));
+            }
+            jobs.add(new FjsspJob(jobId, operations));
+        }
+        return new FjsspProblem(jobs, capacities, blocking);
     }
 
     private String stripComments(String filePath) throws IOException {

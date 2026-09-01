@@ -24,6 +24,22 @@ body {
 }
 
 .app { max-width: 1040px; margin: 0 auto; padding: 28px 24px 64px; }
+
+.app.fjssp {
+  --accent: #ce6969;
+  --accent-soft: #fbe9e9;
+  --bar: #eea1a1;
+}
+.mode-badge {
+  margin-left: 10px;
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+}
 .app-header { display: flex; margin-bottom: 20px; align-items: center;  }
 .app-header h1 { font-size: 30px; font-weight: 700; margin: 0; letter-spacing: -0.02em; }
 .logo-img { height: 37px; margin-right: 20px; }

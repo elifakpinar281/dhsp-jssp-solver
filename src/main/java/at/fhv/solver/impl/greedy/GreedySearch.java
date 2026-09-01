@@ -2,6 +2,7 @@ package at.fhv.solver.impl.greedy;
 
 import at.fhv.model.jssp.*;
 import at.fhv.solver.ISearchAlgorithm;
+import at.fhv.solver.SchedulingProblem;
 import at.fhv.evaluation.IHeuristic;
 import at.fhv.solver.Node;
 import at.fhv.solver.State;
@@ -27,8 +28,8 @@ public class GreedySearch implements ISearchAlgorithm {
     }
 
     @Override
-    public Schedule solve(JsspProblem jsspProblem) {
-        State initialState = jsspProblem.createInitialState(jsspProblem);
+    public Schedule solve(SchedulingProblem problem) {
+        State initialState = problem.createInitialState();
         double heuristicValue = heuristic.evaluate(initialState);
         Node initialNode = new Node(initialState, null, heuristicValue, null);
 
@@ -44,7 +45,7 @@ public class GreedySearch implements ISearchAlgorithm {
         reached.add(initialState);
         frontier.add(initialNode);
 
-        statistics.setTotalOperations(countTotalOperations(jsspProblem));
+        statistics.setTotalOperations(problem.totalOperations());
         long expanded = 0;
         int maxDepth = 0;
         Node deepestNode = initialNode;
@@ -52,7 +53,7 @@ public class GreedySearch implements ISearchAlgorithm {
         while (!frontier.isEmpty()) {
             Node current = frontier.poll();
 
-            if (jsspProblem.isGoal(current.state())) {
+            if (problem.isGoal(current.state())) {
                 statistics.record(expanded, reached.size(), frontier.size(), maxDepth);
                 return new Schedule(buildSchedule(current));
             }
@@ -66,7 +67,7 @@ public class GreedySearch implements ISearchAlgorithm {
                 deepestNode = current;
             }
 
-            for (Node child : expand(current, jsspProblem)) {
+            for (Node child : expand(current, problem)) {
                 State childState = child.state();
                 if (!reached.contains(childState)) {
                     reached.add(childState);
@@ -77,17 +78,17 @@ public class GreedySearch implements ISearchAlgorithm {
 
             if (statistics.limitReached(expanded) || reached.size() >= maxNodes) {
                 statistics.markStoppedByLimit();
-                return completeGreedily(deepestNode, jsspProblem);
+                return completeGreedily(deepestNode, problem);
             }
         }
         return null;
     }
 
-    private Schedule completeGreedily(Node startNode, JsspProblem jsspProblem) {
+    private Schedule completeGreedily(Node startNode, SchedulingProblem problem) {
         Node current = startNode;
 
-        while (!jsspProblem.isGoal(current.state())) {
-            List<Node> children = expand(current, jsspProblem);
+        while (!problem.isGoal(current.state())) {
+            List<Node> children = expand(current, problem);
             if (children.isEmpty()) { return null; }
 
             Node best = children.get(0);
@@ -101,11 +102,9 @@ public class GreedySearch implements ISearchAlgorithm {
         return new Schedule(buildSchedule(current));
     }
 
-    private List<Node> expand(Node node, JsspProblem problem) {
+    private List<Node> expand(Node node, SchedulingProblem problem) {
         List<Node> children = new ArrayList<>();
-        for (Operation operation : problem.getAvailableOperations(node.state())) {
-            Transition transition = problem.applyOperation(node.state(), operation);
-            if (transition == null) {continue;}
+        for (Transition transition : problem.expand(node.state())) {
             double heuristicValue = heuristic.evaluate(transition.state());
             children.add(new Node(transition.state(), node, heuristicValue, transition.scheduledOperations()));
         }
@@ -132,13 +131,5 @@ public class GreedySearch implements ISearchAlgorithm {
         }
         Collections.reverse(schedule);
         return schedule;
-    }
-
-    private int countTotalOperations(JsspProblem problem) {
-        int total = 0;
-        for (Job job : problem.getJobs()) {
-            total = total + job.operations().size();
-        }
-        return total;
     }
 }

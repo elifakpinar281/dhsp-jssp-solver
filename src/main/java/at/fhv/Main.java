@@ -6,9 +6,14 @@ import at.fhv.evaluation.implementation.*;
 import at.fhv.experiment.RunLog;
 import at.fhv.experiment.RunLogWriter;
 import at.fhv.model.exception.AppException;
+import at.fhv.model.fjssp.FjsspProblem;
+import at.fhv.model.fjssp.FjsspProblem;
 import at.fhv.model.jssp.JsspProblem;
 import at.fhv.model.jssp.Schedule;
+import at.fhv.evaluation.implementation.FjsspMakespanHeuristic;
 import at.fhv.solver.ISearchAlgorithm;
+import at.fhv.solver.SchedulingProblem;
+import at.fhv.solver.validation.FjsspValidator;
 import at.fhv.solver.IStartDecoder;
 import at.fhv.solver.impl.beam.BeamSearch;
 import at.fhv.solver.impl.beamStack.BeamStackSearch;
@@ -20,6 +25,7 @@ import at.fhv.solver.impl.tabu.INeighbourhood;
 import at.fhv.solver.impl.tabu.ScheduleEvaluator;
 import at.fhv.solver.impl.tabu.TabuSearch;
 import at.fhv.solver.impl.tabu.impl.*;
+import at.fhv.solver.validation.FjsspValidator;
 import at.fhv.solver.validation.MemorySampler;
 import at.fhv.solver.validation.ScheduleValidator;
 import at.fhv.solver.validation.ValidationResult;
@@ -37,6 +43,7 @@ import java.util.Map;
 import java.util.Random;
 
 //   --instance benchmarks/demoanlage.txt
+//   --mode JSSP|FJSSP           FJSSP: volle Zeit + Bad-Zuweisung, nur GREEDY|BEAM
 //   --algo GREEDY|BEAM|BULB|BEAMSTACK|TABU
 //   --heuristic MAKESPAN|NEXT-T-START|NEXT-T-MAX|COMBINED
 //   --beam <k>
@@ -72,21 +79,41 @@ public class Main {
 
     private static void run(String[] args) throws IOException {
         List<String> instances = options(args, "--instance", "benchmarks/demoanlage.txt");
-        List<String> algorithms = options(args, "--algo", "GREEDY,BEAM,TABU");
+        String mode = option(args, "--mode", "JSSP").toUpperCase();
+        List<String> algorithms = options(args, "--algo", defaultAlgorithms(mode));
         Path outFolder = Path.of(option(args, "--out", "runs"));
 
         RunLogWriter writer = new RunLogWriter(outFolder);
         Parser parser = new Parser();
 
         for (String instance : instances) {
-            JsspProblem problem = parser.parse(instance);
+            Loaded loaded = load(parser, instance, mode);
             for (String Algorithm : algorithms) {
                 String algorithm = Algorithm.toUpperCase().replace("-", "");
+                if (mode.equals("FJSSP") && !algorithm.equals("GREEDY") && !algorithm.equals("BEAM")) {
+                    System.err.println("[skip] " + algorithm + " is not available in FJSSP mode (use GREEDY or BEAM)");
+                    continue;
+                }
                 for (RunConfig config : configsFor(algorithm, args)) {
-                    writer.write(solveOnce(instance, problem, algorithm, config, outFolder));
+                    writer.write(solveOnce(instance, loaded, mode, algorithm, config, outFolder));
                 }
             }
         }
+    }
+
+    private static String defaultAlgorithms(String mode) {
+        return mode.equals("FJSSP") ? "GREEDY,BEAM" : "GREEDY,BEAM,TABU";
+    }
+
+    private record Loaded(SchedulingProblem problem, int jobCount, int machineCount) {}
+
+    private static Loaded load(Parser parser, String instance, String mode) throws IOException {
+        if (mode.equals("FJSSP")) {
+            FjsspProblem fjssp = parser.parseFjssp(instance);
+            return new Loaded(fjssp, fjssp.getJobs().size(), fjssp.getMachines().size());
+        }
+        JsspProblem jssp = parser.parse(instance);
+        return new Loaded(jssp, jssp.getJobs().size(), jssp.getMachines().size());
     }
 
     private interface RunConfig {
@@ -206,11 +233,12 @@ public class Main {
         return result;
     }
 
-    private static RunLog solveOnce(String instance, JsspProblem problem, String algorithm, RunConfig config, Path outFolder) throws IOException {
+    private static RunLog solveOnce(String instance, Loaded loaded, String mode, String algorithm, RunConfig config, Path outFolder) throws IOException {
+        SchedulingProblem problem = loaded.problem();
         Map<String, Object> params = config.toParams();
         IHeuristic heuristic = buildHeuristic(config.heuristic(), problem);
         SearchStatistics statistics = buildStatistics(algorithm);
-        String runId = runId(instance, algorithm, params);
+        String runId = runId(instance, mode, algorithm, params);
         Files.createDirectories(outFolder);
         statistics.enableLog(outFolder.resolve(runId + "-samples.csv").toString());
         ISearchAlgorithm solver = buildSolver(algorithm, problem, heuristic, statistics, config);
@@ -229,13 +257,13 @@ public class Main {
         boolean valid = false;
         List<String> violations = new ArrayList<>();
         if (schedule != null) {
-            ValidationResult result = new ScheduleValidator().validateSchedule(problem, schedule);
+            ValidationResult result = validate(problem, schedule);
             makespan = computeMakespan(schedule);
             valid = result.valid();
             violations = result.violations();
         }
 
-        return new RunLog(runId, LocalDateTime.now().toString(), instance, instanceKey(instance), algorithm, params, problem.getJobs().size(), problem.getMachines().size(), makespan,
+        return new RunLog(runId, LocalDateTime.now().toString(), instance, instanceKey(instance), algorithm, mode, params, loaded.jobCount(), loaded.machineCount(), makespan,
                 valid, elapsed, memorySampler.getPeak(), statistics.getLastExpansions(), statistics.getLastReached(), statistics.getLastMaxDepth(), history,
                 schedule == null ? null : schedule.operations(), violations
         );
@@ -247,23 +275,34 @@ public class Main {
         return new SearchStatistics();
     }
 
-    private static IHeuristic buildHeuristic(String name, JsspProblem problem) {
+    private static ValidationResult validate(SchedulingProblem problem, Schedule schedule) {
+        if (problem instanceof FjsspProblem fjssp) {
+            return new FjsspValidator().validateSchedule(fjssp, schedule);
+        }
+        return new ScheduleValidator().validateSchedule((JsspProblem) problem, schedule);
+    }
+
+    private static IHeuristic buildHeuristic(String name, SchedulingProblem problem) {
+        if (problem instanceof FjsspProblem fjssp) {
+            return new FjsspMakespanHeuristic(fjssp);
+        }
+        JsspProblem jsspProblem = (JsspProblem) problem;
         String selected = (name == null) ? "MAKESPAN" : name.toUpperCase();
         switch (selected) {
-            case "MAKESPAN": return new MakespanEstimateHeuristic(problem);
-            case "NEXT-T-START": return new NextTStartHeuristic(problem);
-            case "NEXT-T-MAX": return new NextTMaxHeuristic(problem, new Slack(problem));
-            case "COMBINED": Slack slack = new Slack(problem);
-                return new CombineHeuristics(new MakespanEstimateHeuristic(problem), List.of(new NextTMaxHeuristic(problem, slack), new NextTStartHeuristic(problem)));
+            case "MAKESPAN": return new MakespanEstimateHeuristic(jsspProblem);
+            case "NEXT-T-START": return new NextTStartHeuristic(jsspProblem);
+            case "NEXT-T-MAX": return new NextTMaxHeuristic(jsspProblem, new Slack(jsspProblem));
+            case "COMBINED": Slack slack = new Slack(jsspProblem);
+                return new CombineHeuristics(new MakespanEstimateHeuristic(jsspProblem), List.of(new NextTMaxHeuristic(jsspProblem, slack), new NextTStartHeuristic(jsspProblem)));
             default: throw new IllegalArgumentException("Unknown heuristic: " + name);
         }
     }
 
-    private static ISearchAlgorithm buildSolver(String algorithm, JsspProblem problem, IHeuristic heuristic, SearchStatistics statistics, RunConfig config) {
+    private static ISearchAlgorithm buildSolver(String algorithm, SchedulingProblem problem, IHeuristic heuristic, SearchStatistics statistics, RunConfig config) {
         return switch (config) {
             case GreedyConfig greedy -> new GreedySearch(heuristic, statistics, GREEDY_MAX_NODES);
             case BeamConfig beam -> buildBeamFamily(algorithm, heuristic, beam.beamWidth(), statistics);
-            case TabuConfig tabu -> buildTabuSearch(problem, heuristic, tabu);
+            case TabuConfig tabu -> buildTabuSearch((JsspProblem) problem, heuristic, tabu);
             default -> throw new IllegalArgumentException("Unknown config type: " + config.getClass().getName());
         };
     }
@@ -311,10 +350,11 @@ public class Main {
     }
 
 
-    private static String runId(String instance, String algorithm, Map<String, Object> params) {
+    private static String runId(String instance, String mode, String algorithm, Map<String, Object> params) {
         StringBuilder id = new StringBuilder();
         id.append(LocalDateTime.now().format(STAMP));
         id.append("_").append(instanceKey(instance));
+        id.append("_").append(mode);
         id.append("_").append(algorithm);
         for (Map.Entry<String, Object> entry : params.entrySet()) {
             id.append("_").append(entry.getKey()).append(entry.getValue());

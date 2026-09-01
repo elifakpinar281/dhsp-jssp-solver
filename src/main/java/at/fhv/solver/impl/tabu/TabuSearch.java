@@ -4,6 +4,7 @@ import at.fhv.model.jssp.JsspProblem;
 import at.fhv.model.jssp.Schedule;
 import at.fhv.solver.ISearchAlgorithm;
 import at.fhv.solver.IStartDecoder;
+import at.fhv.solver.SchedulingProblem;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -89,7 +90,10 @@ public class TabuSearch implements ISearchAlgorithm {
     }
 
     @Override
-    public Schedule solve(JsspProblem problem) {
+    public Schedule solve(SchedulingProblem schedulingProblem) {
+        if (!(schedulingProblem instanceof JsspProblem problem)) {
+            throw new UnsupportedOperationException("TabuSearch supports only JSSP mode");
+        }
         history.clear();
         random.setSeed(seed);
 
