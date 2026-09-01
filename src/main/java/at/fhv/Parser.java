@@ -66,8 +66,13 @@ public class Parser {
         expectKeyword(scanner, "MACHINES");
         int machineCount = nextInt(scanner, "machineCount");
 
-        int[] capacities = parseCapacities(scanner, machineCount);
+        int[] baths = parseCapacities(scanner, machineCount);
         boolean blocking = parseBlocking(scanner);
+
+        // nur zum Dividieren
+        int[] capacities = new int[machineCount];
+        Arrays.fill(capacities, 1);
+
         List<Machine> machines = buildMachines(machineCount, capacities);
         List<Job> jobs = new ArrayList<>();
 
@@ -77,15 +82,26 @@ public class Parser {
 
             for (int operationId = 0; operationId < opCount; operationId++) {
                 int machineId = nextInt(scanner, "machineId");
-                int processingTime = nextInt(scanner, "processingTime");
+                int nominalTime = nextInt(scanner, "processingTime");
                 int maxDwellTime = nextMaxDwell(scanner, "maxDwellTime");
-                validateOperation(jobId, machineId, processingTime, machineCount);
+                validateOperation(jobId, machineId, nominalTime, machineCount);
+
+                int processingTime = divideByBaths(nominalTime, baths[machineId]);
+
                 validateDwell(jobId, operationId, processingTime, maxDwellTime);
                 operations.add(new Operation(operationId, jobId, machineId, processingTime, maxDwellTime));
             }
             jobs.add(new Job(jobId, operations));
         }
         return new JsspProblem(machines, jobs, blocking);
+    }
+
+    // z.B. 3600 / 6 = 600, 2500 / 3 = 833
+    private int divideByBaths(int processingTime, int bathCount) {
+        if (bathCount <= 1) {
+            return processingTime;
+        }
+        return (int) Math.round((double) processingTime / bathCount);
     }
 
     private boolean parseBlocking(Scanner scanner) {
