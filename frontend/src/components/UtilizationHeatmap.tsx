@@ -27,8 +27,8 @@ export default function UtilizationHeatmap({ run }: { run: RunLog }) {
             <div className="bottleneck-list">
                 {topBottlenecks.map((load) => (
                     <div className="bottleneck-row" key={load.machineId}>
-            <span className="bn-name" title={machineName(run.instanceKey, load.machineId)}>
-              {machineName(run.instanceKey, load.machineId)}
+            <span className="bn-name" title={machineName(run.instanceKey, load.machineId, run.mode)}>
+              {machineName(run.instanceKey, load.machineId, run.mode)}
             </span>
                         <span className="bn-bar-track">
               <span className="bn-bar" style={{ width: Math.min(100, load.util * 100).toFixed(1) + "%", background: utilizationColor(load.util) }} />
@@ -44,7 +44,7 @@ export default function UtilizationHeatmap({ run }: { run: RunLog }) {
                     {grid.machineIds.map((machineId, row) => (
                         <g key={machineId}>
                             <text x={LABEL_WIDTH - 8} y={row * CELL_HEIGHT + CELL_HEIGHT - 4} className="row-label" textAnchor="end">
-                                {machineName(run.instanceKey, machineId)}
+                                {machineName(run.instanceKey, machineId, run.mode)}
                             </text>
                             {grid.cells[row].map((value, bin) => (
                                 <rect
@@ -55,7 +55,7 @@ export default function UtilizationHeatmap({ run }: { run: RunLog }) {
                                     height={CELL_HEIGHT - 1}
                                     fill={heatColor(value, fjssp)}
                                 >
-                                    <title>{machineName(run.instanceKey, machineId) + " · " + (value * 100).toFixed(0) + "% busy"}</title>
+                                    <title>{machineName(run.instanceKey, machineId, run.mode) + " · " + (value * 100).toFixed(0) + "% busy"}</title>
                                 </rect>
                             ))}
                         </g>

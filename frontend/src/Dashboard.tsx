@@ -236,7 +236,7 @@ export default function Dashboard() {
                     <StatsBar runs={configRuns} />
 
                     <section className="panel">
-                        <div className="panel-title">Comparison — {algorithmLabel(algorithm)}</div>
+                        <div className="panel-title">Comparison</div>
                         <ComparisonTable algorithmRuns={algorithmRuns} />
                     </section>
 
@@ -244,7 +244,7 @@ export default function Dashboard() {
 
                     {selectedRun !== null ? (
                         <section className="panel">
-                            <div className="panel-title">Utilization &amp; bottlenecks</div>
+                            <div className="panel-title">Utilization</div>
                             <UtilizationHeatmap run={selectedRun} />
                         </section>
                     ) : null}
