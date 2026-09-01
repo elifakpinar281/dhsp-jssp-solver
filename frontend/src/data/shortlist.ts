@@ -17,8 +17,7 @@ export function parseShortlist(text: string): ShortlistEntry[] {
 
 export function serializeShortlist(entries: ShortlistEntry[]): string {
   const lines: string[] = [
-    "# Shortlist — one runId per line, optional note after #",
-    "# Edit by hand or from the dashboard.",
+    "# Shortlist: ",
     "",
   ];
   for (const entry of entries) {

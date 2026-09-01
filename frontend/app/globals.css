@@ -24,9 +24,9 @@ body {
 }
 
 .app { max-width: 1040px; margin: 0 auto; padding: 28px 24px 64px; }
-.app-header { display: flex; align-items: center;  }
+.app-header { display: flex; margin-bottom: 20px; align-items: center;  }
 .app-header h1 { font-size: 30px; font-weight: 700; margin: 0; letter-spacing: -0.02em; }
-.logo-img { height: 150px;}
+.logo-img { height: 37px; margin-right: 20px; }
 .page { display: flex; flex-direction: column; gap: 20px; }
 .empty { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 40px; text-align: center; }
 .empty.error { border-color: #f0c2c2; }
@@ -57,7 +57,7 @@ body {
 .kpi-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 14px; }
 .kpi-card { background: var(--kpi); border-radius: 14px; padding: 16px 18px; }
 .kpi-label { color: var(--muted); font-size: 13px; }
-.kpi-value { font-size: 26px; font-weight: 700; margin-top: 6px; letter-spacing: -0.01em; }
+.kpi-value { font-size: 22px; font-weight: 700; margin-top: 6px; letter-spacing: -0.01em; }
 .panel { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 18px; }
 .panel-title { font-weight: 600; font-size: 15px; margin-bottom: 14px; }
 .sub-title { font-weight: 600; font-size: 13px; color: var(--muted); margin: 14px 0 8px; }
