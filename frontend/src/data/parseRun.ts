@@ -21,6 +21,14 @@ function toSchedule(raw: unknown): ScheduledOp[] | null {
     return ops;
 }
 
+function toProblemMode(value: Record<string, unknown>, fallbackId: string): string | undefined {
+    const raw = value.mode ?? value.problem;
+    if (typeof raw === "string" && raw.length > 0) { return raw.toUpperCase(); }
+    if (fallbackId.includes("_FJSSP_") || fallbackId.endsWith("_FJSSP")) { return "FJSSP"; }
+    if (fallbackId.includes("_JSSP_") || fallbackId.endsWith("_JSSP")) { return "JSSP"; }
+    return undefined;
+}
+
 export function toRunLog(raw: unknown, fallbackId: string): RunLog | null {
     if (raw === null || typeof raw !== "object") { return null; }
     const value = raw as Record<string, unknown>;
@@ -31,7 +39,7 @@ export function toRunLog(raw: unknown, fallbackId: string): RunLog | null {
         instance: typeof value.instance === "string" ? value.instance : "",
         instanceKey: typeof value.instanceKey === "string" ? value.instanceKey : "",
         algorithm: value.algorithm,
-        mode: typeof value.mode === "string" ? value.mode : undefined,
+        mode: toProblemMode(value, fallbackId),
         params: (value.params as Record<string, number | string | boolean>) ?? {},
         jobCount: typeof value.jobCount === "number" ? value.jobCount : 0,
         machineCount: typeof value.machineCount === "number" ? value.machineCount : 0,
