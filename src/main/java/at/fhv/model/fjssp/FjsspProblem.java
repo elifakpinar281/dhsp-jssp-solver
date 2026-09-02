@@ -11,8 +11,6 @@ import java.util.Arrays;
 import java.util.List;
 
 public class FjsspProblem implements SchedulingProblem {
-    private static final int MAX_MACHINE_CHOICES = 3; // Suchbaum kleiner halten?
-
     private final List<FjsspJob> jobs;
     private final boolean blocking;
     private final List<Machine> baths;
@@ -74,6 +72,7 @@ public class FjsspProblem implements SchedulingProblem {
         List<Transition> transitions = new ArrayList<>();
 
         for (FjsspJob job : jobs) {
+            // für jeden Job schauen welche Operation als Nächstes dran ist und dann bestimmen, auf welchem Bad dieses platziert werden kann
             int jobId = job.jobId();
             int fIndex = state.nextOperation()[jobId];
             if (fIndex >= job.operations().size()) { continue; }
@@ -106,27 +105,18 @@ public class FjsspProblem implements SchedulingProblem {
     }
 
     private List<Integer> headBathCandidates(int[] bathAvailableTime, FjsspOperation head) {
-        List<Integer> freeBaths = new ArrayList<>();
+        int best = State.NO_BATH;
         for (int bath : head.eligibleMachines()) {
-            if (bathAvailableTime[bath] != State.BLOCKED) { freeBaths.add(bath); }
-        }
-
-        freeBaths.sort((a, b) -> {
-            int timesorted = Integer.compare(bathAvailableTime[a], bathAvailableTime[b]);
-            if (timesorted != 0) { return timesorted; }
-            return Integer.compare(a, b);
-        });
-
-        List<Integer> candidates = new ArrayList<>();
-        int lastAvailable = Integer.MIN_VALUE;
-        for (int baths : freeBaths) {
-            int available = bathAvailableTime[baths];
-            if (candidates.isEmpty() || available == lastAvailable) {
-                candidates.add(baths);
-                lastAvailable = available;
-                if (candidates.size() >= MAX_MACHINE_CHOICES) { break; }
+            if (bathAvailableTime[bath] == State.BLOCKED) { continue; }
+            if (best == State.NO_BATH
+                    || bathAvailableTime[bath] < bathAvailableTime[best]
+                    || (bathAvailableTime[bath] == bathAvailableTime[best] && bath < best)) {
+                best = bath;
             }
         }
+
+        List<Integer> candidates = new ArrayList<>();
+        if (best != State.NO_BATH) { candidates.add(best); }
         return candidates;
     }
 
@@ -158,7 +148,6 @@ public class FjsspProblem implements SchedulingProblem {
 
     private int latestBathStart(State state, int jobId, List<FjsspOperation> chain, int headBath) {
         if (state.bathAvailableTime()[headBath] == State.BLOCKED) { return State.BLOCKED; }
-
         int startTime = state.jobAvailableTime()[jobId];
         startTime = Math.max(startTime, state.bathAvailableTime()[headBath]);
 

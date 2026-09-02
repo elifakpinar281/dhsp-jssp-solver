@@ -269,10 +269,11 @@ public class JsspProblem implements SchedulingProblem {
         return createInitialState(this);
     }
 
-    // Ein Übergang pro verfügbarer Operation
     @Override
     public List<Transition> expand(State state) {
         List<Transition> transitions = new ArrayList<>();
+
+        // Iteriert über Operation - frage: Welche Operationen können jetzt ausgeführt werden -> es gibt mehrere Möglichkeiten (unterschiedliche Jobs)
         for (Operation operation : getAvailableOperations(state)) {
             Transition transition = applyOperation(state, operation);
             if (transition == null) { continue; }

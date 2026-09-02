@@ -20,7 +20,7 @@ public class BULBSearch implements ISearchAlgorithm {
     private final int maxStored;
     private final int maxDiscrepancies;
     private final Map<State, BULBNode> hashtable = new LinkedHashMap<>();
-    private JsspProblem jsspProblem;
+    private SchedulingProblem problem;
     private long expanded;
     private int maxDepthReached;
     private BULBNode foundGoal;
@@ -39,16 +39,13 @@ public class BULBSearch implements ISearchAlgorithm {
 
     @Override
     public Schedule solve(SchedulingProblem problem) {
-        if (!(problem instanceof JsspProblem jsspProblem)) {
-            throw new UnsupportedOperationException("BULBSearch supports only JSSP mode");
-        }
-        this.jsspProblem = jsspProblem;
+        this.problem = problem;
         this.expanded = 0;
         this.maxDepthReached = 0;
         this.foundGoal = null;
-        statistics.setTotalOperations(countTotalOperations(jsspProblem));
+        statistics.setTotalOperations(problem.totalOperations());
 
-        State initialState = jsspProblem.createInitialState(jsspProblem);
+        State initialState = problem.createInitialState();
         BULBNode root = new BULBNode(initialState, null, null, heuristic.evaluate(initialState), 0 );
         hashtable.clear();
         hashtable.put(initialState, root);
@@ -148,9 +145,7 @@ public class BULBSearch implements ISearchAlgorithm {
     private List<BULBNode> generateSucessors(List<BULBNode> currentLayer) {
         List<BULBNode> successors = new ArrayList<>();
         for (BULBNode node : currentLayer) {
-            for (Operation operation : jsspProblem.getAvailableOperations(node.state())) {
-                Transition transition = jsspProblem.applyOperation(node.state(), operation);
-                if (transition == null) { continue; }
+            for (Transition transition : problem.expand(node.state())) {
                 State childState = transition.state();
                 if (hashtable.containsKey(childState)) { continue; }
                 double heur = heuristic.evaluate(childState);
@@ -172,7 +167,7 @@ public class BULBSearch implements ISearchAlgorithm {
     private BULBNode bestGoal(List<BULBNode> successors) {
         BULBNode best = null;
         for (BULBNode node : successors) {
-            if (jsspProblem.isGoal(node.state())) {
+            if (problem.isGoal(node.state())) {
                 if (best == null || makespanOf(node.state()) < makespanOf(best.state())) { best = node; }
             }
         }
@@ -218,11 +213,4 @@ public class BULBSearch implements ISearchAlgorithm {
         return schedule;
     }
 
-    private int countTotalOperations(JsspProblem jsspProblem) {
-        int total = 0;
-        for (Job job : jsspProblem.getJobs()) {
-            total = total + job.operations().size();
-        }
-        return total;
-    }
 }

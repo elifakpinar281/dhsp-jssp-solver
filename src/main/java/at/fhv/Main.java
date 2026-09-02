@@ -42,9 +42,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Random;
 
+// zB ./gradlew run --args="--instance benchmarks/demoanlage.txt --mode FJSSP --algo GREEDY,BEAM,BULB,BEAMSTACK --beam 20,100,400"
 //   --instance benchmarks/demoanlage.txt
-//   --mode JSSP|FJSSP           FJSSP: volle Zeit + Bad-Zuweisung, nur GREEDY|BEAM
-//   --algo GREEDY|BEAM|BULB|BEAMSTACK|TABU
+//   --mode JSSP|FJSSP           FJSSP: volle Zeit + Bad-Zuweisung; alle ausser TABU
+//   --algo GREEDY|BEAM|BULB|BEAMSTACK|TABU   (TABU nur JSSP)
 //   --heuristic MAKESPAN|NEXT-T-START|NEXT-T-MAX|COMBINED
 //   --beam <k>
 //   --start COLD|WARM           für Tabu
@@ -90,8 +91,8 @@ public class Main {
             Loaded loaded = load(parser, instance, mode);
             for (String Algorithm : algorithms) {
                 String algorithm = Algorithm.toUpperCase().replace("-", "");
-                if (mode.equals("FJSSP") && !algorithm.equals("GREEDY") && !algorithm.equals("BEAM")) {
-                    System.err.println("[skip] " + algorithm + " is not available in FJSSP mode (use GREEDY or BEAM)");
+                if (mode.equals("FJSSP") && algorithm.equals("TABU")) {
+                    System.err.println("[skip] TABU is not available in FJSSP mode yet (needs machine-assignment moves)");
                     continue;
                 }
                 for (RunConfig config : configsFor(algorithm, args)) {
@@ -102,7 +103,7 @@ public class Main {
     }
 
     private static String defaultAlgorithms(String mode) {
-        return mode.equals("FJSSP") ? "GREEDY,BEAM" : "GREEDY,BEAM,TABU";
+        return mode.equals("FJSSP") ? "GREEDY,BEAM,BULB,BEAMSTACK" : "GREEDY,BEAM,TABU";
     }
 
     private record Loaded(SchedulingProblem problem, int jobCount, int machineCount) {}

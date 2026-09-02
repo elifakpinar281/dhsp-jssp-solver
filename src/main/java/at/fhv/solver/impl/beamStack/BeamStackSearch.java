@@ -19,7 +19,7 @@ public class BeamStackSearch implements ISearchAlgorithm {
     private final int beamWidth;
     private final SearchStatistics searchStatistics;
     private final int maxSweeps;
-    private JsspProblem jsspProblem;
+    private SchedulingProblem problem;
     private long expanded;
     private int maxDepthReached;
 
@@ -36,15 +36,12 @@ public class BeamStackSearch implements ISearchAlgorithm {
 
     @Override
     public Schedule solve(SchedulingProblem problem) {
-        if (!(problem instanceof JsspProblem jsspProblem)) {
-            throw new UnsupportedOperationException("BeamStackSearch supports only JSSP mode");
-        }
-        this.jsspProblem = jsspProblem;
+        this.problem = problem;
         this.expanded = 0;
         this.maxDepthReached = 0;
-        searchStatistics.setTotalOperations(countTotalOperations(jsspProblem));
+        searchStatistics.setTotalOperations(problem.totalOperations());
 
-        State initialState = jsspProblem.createInitialState(jsspProblem);
+        State initialState = problem.createInitialState();
         BeamStackNode root = new BeamStackNode(initialState, null, null, lowerBound(initialState), 0);
         List<Range> items = new ArrayList<>();
         items.add(new Range(0, INF));
@@ -111,7 +108,7 @@ public class BeamStackSearch implements ISearchAlgorithm {
             List<BeamStackNode> nextLayer = open.computeIfAbsent(layer + 1, key -> new ArrayList<>());
 
             for (BeamStackNode node : open.get(layer)) {
-                if (jsspProblem.isGoal(node.state())) {
+                if (problem.isGoal(node.state())) {
                     int makespan = makespanOf(node.state());
                     if (makespan < bestMakespan) {
                         bestMakespan = makespan;
@@ -160,11 +157,7 @@ public class BeamStackSearch implements ISearchAlgorithm {
 
     private List<BeamStackNode> expand(BeamStackNode node) {
         List<BeamStackNode> children = new ArrayList<>();
-        for (Operation operation : jsspProblem.getAvailableOperations(node.state())) {
-            Transition transition = jsspProblem.applyOperation(node.state(), operation);
-            if (transition == null) {
-                continue;
-            }
+        for (Transition transition : problem.expand(node.state())) {
             State childState = transition.state();
             int f = lowerBound(childState);
             children.add(new BeamStackNode(childState, node, transition.scheduledOperations(), f, node.dDepth() + 1));
@@ -173,47 +166,12 @@ public class BeamStackSearch implements ISearchAlgorithm {
     }
 
 
+    // Untere Schranke aus der injizierten (zulaessigen) Heuristik.
+    // Die Heuristik ist eine Relaxation (min. Bearbeitungszeiten / Restlast pro Station),
+    // unterschaetzt den echten Rest-Makespan also nie -> BeamStack bleibt optimal/vollstaendig.
+    // Generisch fuer JSSP und FJSSP, da nur die IHeuristic-Schnittstelle benutzt wird.
     private int lowerBound(State state) {
-        int jobBound = 0;
-        for (int jobId = 0; jobId < jsspProblem.getJobs().size(); jobId++) {
-            List<Operation> operations = jsspProblem.getJobs().get(jobId).operations();
-            int remaining = state.jobAvailableTime()[jobId];
-            for (int i = state.nextOperation()[jobId]; i < operations.size(); i++) {
-                remaining += operations.get(i).processingTime();
-            }
-            jobBound = Math.max(jobBound, remaining);
-        }
-        int machineBound = machineBound(state);
-        return Math.max(jobBound, machineBound);
-    }
-
-    private int machineBound(State state) {
-        int machineCount = jsspProblem.getMachines().size();
-        int[] remainingLoad = new int[machineCount];
-
-        for (int jobId = 0; jobId < jsspProblem.getJobs().size(); jobId++) {
-            List<Operation> operations = jsspProblem.getJobs().get(jobId).operations();
-            for (int i = state.nextOperation()[jobId]; i < operations.size(); i++) {
-                Operation operation = operations.get(i);
-                remainingLoad[operation.machineId()] += operation.processingTime();
-            }
-        }
-
-        int machineBound = 0;
-        for (int machineId = 0; machineId < machineCount; machineId++) {
-            if (remainingLoad[machineId] == 0) { continue; }
-            int capacity = Math.max(1, jsspProblem.capacityOf(machineId));
-            int offset = jsspProblem.bathOffset(machineId);
-            long freeSum = 0;
-            for (int bath = offset; bath < offset + capacity; bath++) {
-                int free = state.bathAvailableTime()[bath];
-                if (free == State.BLOCKED) { free = 0; }
-                freeSum += free;
-            }
-            int estimate = (int) ((freeSum + remainingLoad[machineId]) / capacity);
-            machineBound = Math.max(machineBound, estimate);
-        }
-        return machineBound;
+        return (int) heuristic.evaluate(state);
     }
 
     private int makespanOf(State state) {
@@ -248,11 +206,4 @@ public class BeamStackSearch implements ISearchAlgorithm {
         return schedule;
     }
 
-    private int countTotalOperations(JsspProblem jsspProblem) {
-        int total = 0;
-        for (Job job : jsspProblem.getJobs()) {
-            total = total + job.operations().size();
-        }
-        return total;
-    }
 }
