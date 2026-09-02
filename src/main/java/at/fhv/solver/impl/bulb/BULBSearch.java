@@ -9,6 +9,7 @@ import at.fhv.stats.SearchStatistics;
 
 import java.util.*;
 
+// https://www.ijcai.org/Proceedings/05/Papers/0596.pdf
 public class BULBSearch implements ISearchAlgorithm {
     private static final double GOAL_FOUND = 1.0;
     private static final double NO_PATH = Double.POSITIVE_INFINITY;

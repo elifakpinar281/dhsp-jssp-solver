@@ -12,6 +12,7 @@ import at.fhv.stats.SearchStatistics;
 
 import java.util.*;
 
+// Pseudocode von https://cdn.aaai.org/ICAPS/2005/ICAPS05-010.pdf
 public class BeamStackSearch implements ISearchAlgorithm {
     private static final int INF = Integer.MAX_VALUE;
     private static final int MAX_SWEEPS = 100_000;
