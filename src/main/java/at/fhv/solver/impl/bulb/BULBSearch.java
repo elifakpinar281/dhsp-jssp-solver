@@ -189,7 +189,9 @@ public class BULBSearch implements ISearchAlgorithm {
         return makespan;
     }
 
+    // Vergleicht zwei States um die Reihenfolge zwischen ihnen festzulegen
     private static int compareStates(State a, State b) {
+        // hierarchisch -> die anderen erst vergleichen, wenn das vorherige Kriterium gleich ist
         int c = Arrays.compare(a.nextOperation(), b.nextOperation());
         if (c !=0) return c;
         c = Arrays.compare(a.jobAvailableTime(), b.jobAvailableTime());

@@ -15,7 +15,7 @@ public class FjsspProblem implements SchedulingProblem {
     private final boolean blocking;
     private final List<Machine> baths;
     private final int[] stationCapacity;
-    private final int[] stationOffset;
+    private final int[] stationOffset; // Start-Id der Station
     private final int stationCount;
     private final int totalBaths;
 
@@ -48,6 +48,7 @@ public class FjsspProblem implements SchedulingProblem {
         return new State(nextOperation, bathAvailableTime, jobAvailableTime, jobBath);
     }
 
+    // Wie davor -> Goal wenn alle Operationen eingeplant sind
     @Override
     public boolean isGoal(State state) {
         for (int jobId = 0; jobId < jobs.size(); jobId++) {
@@ -58,6 +59,7 @@ public class FjsspProblem implements SchedulingProblem {
         return true;
     }
 
+    // Zählt einfach alle Operationen
     @Override
     public int totalOperations() {
         int total = 0;
@@ -67,6 +69,7 @@ public class FjsspProblem implements SchedulingProblem {
         return total;
     }
 
+    // Bekommt aktuellen State und soll alle möglichen nächsten Entscheidungen zurückgeben
     @Override
     public List<Transition> expand(State state) {
         List<Transition> transitions = new ArrayList<>();
@@ -75,10 +78,10 @@ public class FjsspProblem implements SchedulingProblem {
             // für jeden Job schauen welche Operation als Nächstes dran ist und dann bestimmen, auf welchem Bad dieses platziert werden kann
             int jobId = job.jobId();
             int fIndex = state.nextOperation()[jobId];
-            if (fIndex >= job.operations().size()) { continue; }
+            if (fIndex >= job.operations().size()) { continue; } // überspringe wenn Job schon fertig
 
             List<FjsspOperation> chain = dwellChain(jobId, fIndex);
-            FjsspOperation head = chain.get(0);
+            FjsspOperation head = chain.get(0); // erste Operation der Chain
 
             for (int headBath : headBathCandidates(state.bathAvailableTime(), head)) {
                 Transition transition = tryPlace(state, jobId, chain, headBath);
@@ -90,6 +93,7 @@ public class FjsspProblem implements SchedulingProblem {
     }
 
     // Wenn die Operation eine Max-Dwell-Time hat, muss die nächste innerhalb dieser Zeit anschließen - gemeinsam platzieren
+    // für jeden job - stellt sicher dass es keine "Lücken" gibt, die die Dwell-Time verletzen würde
     public List<FjsspOperation> dwellChain(int jobId, int firstIndex) {
         List<FjsspOperation> operations = jobs.get(jobId).operations();
         List<FjsspOperation> chain = new ArrayList<>();
@@ -106,8 +110,11 @@ public class FjsspProblem implements SchedulingProblem {
 
     private List<Integer> headBathCandidates(int[] bathAvailableTime, FjsspOperation head) {
         int best = State.NO_BATH;
-        for (int bath : head.eligibleMachines()) {
+
+        for (int bath : head.eligibleMachines()) { // für Bäder, die Operation benutzen darf
             if (bathAvailableTime[bath] == State.BLOCKED) { continue; }
+
+            // Das Bad, das am frühesten verfügbar ist, wird bevorzugt
             if (best == State.NO_BATH
                     || bathAvailableTime[bath] < bathAvailableTime[best]
                     || (bathAvailableTime[bath] == bathAvailableTime[best] && bath < best)) {
@@ -116,11 +123,13 @@ public class FjsspProblem implements SchedulingProblem {
         }
 
         List<Integer> candidates = new ArrayList<>();
-        if (best != State.NO_BATH) { candidates.add(best); }
+        if (best != State.NO_BATH) { candidates.add(best); } // nur das beste zurückgeben
         return candidates;
     }
 
+    // Gesamte Kette einplanen
     private Transition tryPlace(State state, int jobId, List<FjsspOperation> chain, int headBath) {
+        // Die Kette kann erst starten, wenn Job und Bad bereit sind - max(jobReady, bathReady)
         int startTime = Math.max(state.jobAvailableTime()[jobId], state.bathAvailableTime()[headBath]);
 
         ChainPlacement placement = null;
@@ -146,6 +155,7 @@ public class FjsspProblem implements SchedulingProblem {
         return commit(state, jobId, chain, placement);
     }
 
+    // Kette wird so weit nach hinten verschoben, dass alles noch erreichbar ist
     private int latestBathStart(State state, int jobId, List<FjsspOperation> chain, int headBath) {
         if (state.bathAvailableTime()[headBath] == State.BLOCKED) { return State.BLOCKED; }
         int startTime = state.jobAvailableTime()[jobId];
@@ -159,8 +169,9 @@ public class FjsspProblem implements SchedulingProblem {
         return startTime;
     }
 
+    // Entscheidet - welches Bad, Start, Ende und ob valid
     private ChainPlacement placeChain(State state, int jobId, List<FjsspOperation> chain, int chainStart, int headBath) {
-        int[] bathAvailableTime = state.bathAvailableTime().clone();
+        int[] bathAvailableTime = state.bathAvailableTime().clone(); // Beim Ausprobieren muss ich die Verfügbarkeit der Bäder verändern
         int[] baths = new int[chain.size()];
         int[] startTimes = new int[chain.size()];
         int[] endTimes = new int[chain.size()];
@@ -172,19 +183,22 @@ public class FjsspProblem implements SchedulingProblem {
 
             int bath;
             if (i == 0) {
-                bath = headBath;
+                bath = headBath; // unser head als erstes
                 if (bathAvailableTime[bath] == State.BLOCKED) { return ChainPlacement.blockedByCarrier(); }
             } else {
+                // für weitere Operation immer das frühest verfügbare geeignete Bad suchen
                 bath = earliestFreeBath(bathAvailableTime, operation.eligibleMachines());
                 if (bath == State.NO_BATH) { return ChainPlacement.blockedByCarrier(); }
             }
 
             int startTime = Math.max(jobReady, bathAvailableTime[bath]);
 
+            // Op1 start 20 und maxDwellTime 5
+            // latestAdmissibleStart = 20 + 5 = 25
             if (i > 0) {
                 FjsspOperation predecessor = chain.get(i - 1);
                 int latestAdmissibleStart = startTimes[i - 1] + predecessor.maxDwellTime();
-                if (startTime > latestAdmissibleStart) {
+                if (startTime > latestAdmissibleStart) { // verschiebt die ganze Kette
                     int shift = startTime - latestAdmissibleStart;
                     return ChainPlacement.invalid(chainStart + shift);
                 }
@@ -199,6 +213,7 @@ public class FjsspProblem implements SchedulingProblem {
         return ChainPlacement.valid(baths, startTimes, endTimes);
     }
 
+    // erstellt einen neuen State
     private Transition commit(State state, int jobId, List<FjsspOperation> chain, ChainPlacement placement) {
         int[] newNextOperation = state.nextOperation().clone();
         int[] newBathAvailableTime = state.bathAvailableTime().clone();
@@ -210,7 +225,7 @@ public class FjsspProblem implements SchedulingProblem {
         int firstIndex = state.nextOperation()[jobId];
         boolean jobFinished = firstIndex + chain.size() >= jobs.get(jobId).operations().size();
 
-        if (blocking) {
+        if (blocking) { // Wenn Job noch nicht fertig ist, bleibt das Bad blockiert
             if (state.jobBath()[jobId] != State.NO_BATH) {
                 newBathAvailableTime[state.jobBath()[jobId]] = placement.startTimes()[0];
             }
@@ -226,7 +241,7 @@ public class FjsspProblem implements SchedulingProblem {
                 newBathAvailableTime[placement.baths()[lastIndex]] = State.BLOCKED;
                 newJobBath[jobId] = placement.baths()[lastIndex];
             }
-        } else {
+        } else { // Nach jeder Operation ist das Bad wieder frei
             for (int i = 0; i <= lastIndex; i++) {
                 newBathAvailableTime[placement.baths()[i]] = placement.endTimes()[i];
             }

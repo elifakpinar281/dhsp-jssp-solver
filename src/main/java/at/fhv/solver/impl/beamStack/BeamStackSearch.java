@@ -13,9 +13,11 @@ import at.fhv.stats.SearchStatistics;
 import java.util.*;
 
 // Pseudocode von https://cdn.aaai.org/ICAPS/2005/ICAPS05-010.pdf
+// Kann zurückgehen bei pruned Werten und diese erneut durchsuchen
+// Findet eine Schedule und untersucht dann Alternativen
 public class BeamStackSearch implements ISearchAlgorithm {
     private static final int INF = Integer.MAX_VALUE;
-    private static final int MAX_SWEEPS = 100_000;
+    private static final int MAX_SWEEPS = 100_000; // maximale Anzahl von Durchläufen
     private final IHeuristic heuristic;
     private final int beamWidth;
     private final SearchStatistics searchStatistics;
@@ -166,11 +168,6 @@ public class BeamStackSearch implements ISearchAlgorithm {
         return children;
     }
 
-
-    // Untere Schranke aus der injizierten (zulaessigen) Heuristik.
-    // Die Heuristik ist eine Relaxation (min. Bearbeitungszeiten / Restlast pro Station),
-    // unterschaetzt den echten Rest-Makespan also nie -> BeamStack bleibt optimal/vollstaendig.
-    // Generisch fuer JSSP und FJSSP, da nur die IHeuristic-Schnittstelle benutzt wird.
     private int lowerBound(State state) {
         return (int) heuristic.evaluate(state);
     }
