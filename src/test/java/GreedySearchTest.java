@@ -1,4 +1,4 @@
-import at.fhv.evaluation.implementation.MakespanEstimateHeuristic;
+import at.fhv.evaluation.implementation.jssp.MakespanEstimateHeuristic;
 import at.fhv.model.jssp.*;
 import at.fhv.solver.impl.greedy.GreedySearch;
 import at.fhv.solver.validation.ScheduleValidator;

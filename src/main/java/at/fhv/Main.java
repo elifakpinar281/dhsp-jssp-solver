@@ -3,14 +3,19 @@ package at.fhv;
 import at.fhv.evaluation.IHeuristic;
 import at.fhv.evaluation.Slack;
 import at.fhv.evaluation.implementation.*;
+import at.fhv.evaluation.implementation.fjssp.*;
+import at.fhv.evaluation.implementation.jssp.FutureMakespanHeuristic;
+import at.fhv.evaluation.implementation.jssp.MakespanEstimateHeuristic;
+import at.fhv.evaluation.implementation.jssp.NextTMaxHeuristic;
+import at.fhv.evaluation.implementation.jssp.NextTStartHeuristic;
 import at.fhv.experiment.RunLog;
 import at.fhv.experiment.RunLogWriter;
 import at.fhv.model.exception.AppException;
 import at.fhv.model.fjssp.FjsspProblem;
 import at.fhv.model.fjssp.FjsspProblem;
 import at.fhv.model.jssp.JsspProblem;
+import at.fhv.model.fjssp.FjsspToJssp;
 import at.fhv.model.jssp.Schedule;
-import at.fhv.evaluation.implementation.FjsspMakespanHeuristic;
 import at.fhv.solver.ISearchAlgorithm;
 import at.fhv.solver.SchedulingProblem;
 import at.fhv.solver.validation.FjsspValidator;
@@ -21,9 +26,11 @@ import at.fhv.solver.impl.bulb.BULBSearch;
 import at.fhv.solver.impl.decoder.DwellStartDecoder;
 import at.fhv.solver.impl.decoder.StartDecoder;
 import at.fhv.solver.impl.greedy.GreedySearch;
+import at.fhv.solver.impl.astar.AStarSearch;
 import at.fhv.solver.impl.tabu.INeighbourhood;
 import at.fhv.solver.impl.tabu.ScheduleEvaluator;
 import at.fhv.solver.impl.tabu.TabuSearch;
+import at.fhv.solver.impl.tabu.FjsspTabuSearch;
 import at.fhv.solver.impl.tabu.impl.*;
 import at.fhv.solver.validation.FjsspValidator;
 import at.fhv.solver.validation.MemorySampler;
@@ -44,9 +51,10 @@ import java.util.Random;
 
 // zB ./gradlew run --args="--instance benchmarks/demoanlage.txt --mode FJSSP --algo GREEDY,BEAM,BULB,BEAMSTACK --beam 20,100,400"
 //   --instance benchmarks/demoanlage.txt
-//   --mode JSSP|FJSSP           FJSSP: volle Zeit + Bad-Zuweisung; alle ausser TABU
-//   --algo GREEDY|BEAM|BULB|BEAMSTACK|TABU   (TABU nur JSSP)
-//   --heuristic MAKESPAN|NEXT-T-START|NEXT-T-MAX|COMBINED
+//   --mode JSSP|FJSS
+//   --algo GREEDY|ASTAR|BEAM|BULB|BEAMSTACK|TABU
+//   --heuristic MAKESPAN|REMAINING|NEXT-T-START|NEXT-T-MAX|COMBINED
+//   --weight <w> für ASTAR:
 //   --beam <k>
 //   --start COLD|WARM           für Tabu
 //   --nb AUTO|N5|N6|STRIDE
@@ -91,10 +99,6 @@ public class Main {
             Loaded loaded = load(parser, instance, mode);
             for (String Algorithm : algorithms) {
                 String algorithm = Algorithm.toUpperCase().replace("-", "");
-                if (mode.equals("FJSSP") && algorithm.equals("TABU")) {
-                    System.err.println("[skip] TABU is not available in FJSSP mode yet (needs machine-assignment moves)");
-                    continue;
-                }
                 for (RunConfig config : configsFor(algorithm, args)) {
                     writer.write(solveOnce(instance, loaded, mode, algorithm, config, outFolder));
                 }
@@ -131,6 +135,16 @@ public class Main {
         }
     }
 
+    private record AStarConfig(String heuristic, double weight) implements RunConfig {
+        @Override
+        public Map<String, Object> toParams() {
+            Map<String, Object> params = new LinkedHashMap<>();
+            params.put("heuristic", heuristic);
+            params.put("weight", weight);
+            return params;
+        }
+    }
+
     // For Beam, BULB, Beamstack - they only differ in solver class
     private record BeamConfig(String heuristic, int beamWidth) implements RunConfig {
         @Override
@@ -161,6 +175,7 @@ public class Main {
     private static List<RunConfig> configsFor(String algorithm, String[] args) {
         switch (algorithm) {
             case "GREEDY": return greedyConfigs(args);
+            case "ASTAR": return astarConfigs(args);
             case "BEAM": case "BULB": case "BEAMSTACK": return beamConfigs(args);
             case "TABU": return tabuConfigs(args);
             default: throw new IllegalArgumentException("Unknown algorithm: "+algorithm);
@@ -171,6 +186,15 @@ public class Main {
         List<RunConfig> configs = new ArrayList<>();
         for (String heuristic : options(args, "--heuristic", "MAKESPAN")) {
             configs.add(new GreedyConfig(heuristic.toUpperCase()));
+        }
+        return configs;
+    }
+
+    private static List<RunConfig> astarConfigs(String[] args) {
+        List<RunConfig> configs = new ArrayList<>();
+        double weight = Double.parseDouble(option(args, "--weight", "1.0"));
+        for (String heuristic : options(args, "--heuristic", "REMAINING")) {
+            configs.add(new AStarConfig(heuristic.toUpperCase(), weight));
         }
         return configs;
     }
@@ -271,7 +295,7 @@ public class Main {
     }
 
     private static SearchStatistics buildStatistics(String algorithm) {
-        if (algorithm.equals("GREEDY")) { return new SearchStatistics(1000, GREEDY_MAX_EXPANSIONS);}
+        if (algorithm.equals("GREEDY") || algorithm.equals("ASTAR")) { return new SearchStatistics(1000, GREEDY_MAX_EXPANSIONS);}
         if (algorithm.equals("BULB") || algorithm.equals("BEAMSTACK")) { return new SearchStatistics(1000, BACKTRACKING_MAX_EXPANSIONS);}
         return new SearchStatistics();
     }
@@ -285,12 +309,22 @@ public class Main {
 
     private static IHeuristic buildHeuristic(String name, SchedulingProblem problem) {
         if (problem instanceof FjsspProblem fjssp) {
-            return new FjsspMakespanHeuristic(fjssp);
+            String selected = (name == null) ? "MAKESPAN" : name.toUpperCase();
+            switch (selected) {
+                case "MAKESPAN": return new FjsspMakespanHeuristic(fjssp);
+                case "REMAINING": return new FjsspFutureMakespanHeuristic(fjssp);
+                case "NEXT-T-START": return new FjsspNextTStartHeuristic(fjssp);
+                case "NEXT-T-MAX": return new FjsspNextTMaxHeuristic(fjssp, new FjsspSlack(fjssp));
+                case "COMBINED": FjsspSlack fjsspSlack = new FjsspSlack(fjssp);
+                    return new CombineHeuristics(new FjsspMakespanHeuristic(fjssp), List.of(new FjsspNextTMaxHeuristic(fjssp, fjsspSlack), new FjsspNextTStartHeuristic(fjssp)));
+                default: throw new IllegalArgumentException("Unknown heuristic: " + name);
+            }
         }
         JsspProblem jsspProblem = (JsspProblem) problem;
         String selected = (name == null) ? "MAKESPAN" : name.toUpperCase();
         switch (selected) {
             case "MAKESPAN": return new MakespanEstimateHeuristic(jsspProblem);
+            case "REMAINING": return new FutureMakespanHeuristic(jsspProblem);
             case "NEXT-T-START": return new NextTStartHeuristic(jsspProblem);
             case "NEXT-T-MAX": return new NextTMaxHeuristic(jsspProblem, new Slack(jsspProblem));
             case "COMBINED": Slack slack = new Slack(jsspProblem);
@@ -302,8 +336,9 @@ public class Main {
     private static ISearchAlgorithm buildSolver(String algorithm, SchedulingProblem problem, IHeuristic heuristic, SearchStatistics statistics, RunConfig config) {
         return switch (config) {
             case GreedyConfig greedy -> new GreedySearch(heuristic, statistics, GREEDY_MAX_NODES);
+            case AStarConfig astar -> new AStarSearch(heuristic, statistics, GREEDY_MAX_NODES, astar.weight());
             case BeamConfig beam -> buildBeamFamily(algorithm, heuristic, beam.beamWidth(), statistics);
-            case TabuConfig tabu -> buildTabuSearch((JsspProblem) problem, heuristic, tabu);
+            case TabuConfig tabu -> buildTabuSolver(problem, tabu);
             default -> throw new IllegalArgumentException("Unknown config type: " + config.getClass().getName());
         };
     }
@@ -315,6 +350,17 @@ public class Main {
             case "BEAMSTACK": return new BeamStackSearch(heuristic, beamWidth, statistics);
             default: throw new IllegalArgumentException("Unknown beam algorithm: " + algorithm);
         }
+    }
+
+    private static ISearchAlgorithm buildTabuSolver(SchedulingProblem problem, TabuConfig config) {
+        if (problem instanceof FjsspProblem fjssp) {
+            JsspProblem induced = FjsspToJssp.toJssp(fjssp);
+            IHeuristic inducedHeuristic = buildHeuristic(config.heuristic(), induced);
+            TabuSearch inner = buildTabuSearch(induced, inducedHeuristic, config);
+            return new FjsspTabuSearch(inner, induced, fjssp);
+        }
+        IHeuristic heuristic = buildHeuristic(config.heuristic(), problem);
+        return buildTabuSearch((JsspProblem) problem, heuristic, config);
     }
 
     private static TabuSearch buildTabuSearch(JsspProblem problem, IHeuristic heuristic, TabuConfig config) {

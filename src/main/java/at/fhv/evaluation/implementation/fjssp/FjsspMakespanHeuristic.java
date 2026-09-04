@@ -1,8 +1,6 @@
-package at.fhv.evaluation.implementation;
+package at.fhv.evaluation.implementation.fjssp;
 
 import at.fhv.evaluation.IHeuristic;
-import at.fhv.model.fjssp.FjsspOperation;
-import at.fhv.model.fjssp.FjsspProblem;
 import at.fhv.model.fjssp.FjsspOperation;
 import at.fhv.model.fjssp.FjsspProblem;
 import at.fhv.solver.State;

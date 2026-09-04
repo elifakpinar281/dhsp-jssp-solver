@@ -118,6 +118,13 @@ body.fjssp {
 .gantt .grid { stroke-dasharray: 2 3; }
 .gantt-bar { cursor: pointer; }
 .gantt-bar:hover { opacity: 0.82; }
+.gantt-dwell { cursor: pointer; fill-opacity: 0.4; }
+.gantt-dwell:hover { fill-opacity: 0.6; }
+.gantt-controls { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; font-size: 11px; color: var(--muted); margin: 0 2px 8px; }
+.gantt-check { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; color: var(--ink); }
+.legend-swatch { width: 22px; height: 10px; border-radius: 3px; display: inline-block; }
+.legend-solid { background: #7c5cff; }
+.legend-dwell { background: rgba(124, 92, 255, 0.4); }
 .gantt-tooltip { position: fixed; z-index: 50; pointer-events: none; background: #1f2430; color: #fff; border-radius: 10px; padding: 9px 12px; font-size: 12px; box-shadow: 0 8px 24px rgba(0,0,0,0.22); max-width: 280px; }
 .tt-title { font-weight: 700; margin-bottom: 3px; }
 .tt-station { color: #c9cede; margin-bottom: 5px; }

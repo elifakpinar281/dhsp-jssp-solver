@@ -1,8 +1,6 @@
 package at.fhv.evaluation.implementation;
 
 import at.fhv.evaluation.IHeuristic;
-import at.fhv.evaluation.Slack;
-import at.fhv.model.jssp.JsspProblem;
 import at.fhv.solver.State;
 
 import java.util.List;
