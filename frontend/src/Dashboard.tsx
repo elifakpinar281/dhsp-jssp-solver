@@ -4,7 +4,6 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { RunLog, ShortlistEntry } from "./types";
 import { fetchRuns, saveShortlist } from "./data/api";
 import { bestRun } from "./analysis/grouping";
-import { algorithmLabel } from "./labels";
 import AlgorithmTabs from "./components/AlgorithmTabs";
 import ParameterBar from "./components/ParameterBar";
 import RunPicker from "./components/RunPicker";
@@ -12,6 +11,7 @@ import KpiCards from "./components/KpiCards";
 import GanttChart from "./components/GanttChart";
 import StatsBar from "./components/StatsBar";
 import ComparisonTable from "./components/ComparisonTable";
+import RandomnessComparison from "./components/RandomnessComparison";
 import UtilizationHeatmap from "./components/UtilizationHeatmap";
 import ConvergenceChart from "./components/ConvergenceChart";
 import ParetoScatter from "./components/ParetoScatter";
@@ -238,6 +238,11 @@ export default function Dashboard() {
                     <section className="panel">
                         <div className="panel-title">Comparison</div>
                         <ComparisonTable algorithmRuns={algorithmRuns} />
+                    </section>
+
+                    <section className="panel">
+                        <div className="panel-title">Randomness comparison</div>
+                        <RandomnessComparison algorithmRuns={algorithmRuns} selected={params} fjssp={mode === "FJSSP"} />
                     </section>
 
                     <div className="analysis-divider">Analysis</div>

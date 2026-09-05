@@ -12,7 +12,6 @@ import at.fhv.experiment.RunLog;
 import at.fhv.experiment.RunLogWriter;
 import at.fhv.model.exception.AppException;
 import at.fhv.model.fjssp.FjsspProblem;
-import at.fhv.model.fjssp.FjsspProblem;
 import at.fhv.model.jssp.JsspProblem;
 import at.fhv.model.fjssp.FjsspToJssp;
 import at.fhv.model.jssp.Schedule;
@@ -124,34 +123,42 @@ public class Main {
     private interface RunConfig {
         String heuristic();
         Map<String, Object> toParams();
+        default double randomness() { return 0.0; }
+        default long seed() { return 0L; }
     }
 
-    private record GreedyConfig(String heuristic) implements RunConfig {
+    private record GreedyConfig(String heuristic, double randomness, long seed) implements RunConfig {
         @Override
         public Map<String, Object> toParams() {
             Map<String, Object> params = new LinkedHashMap<>();
             params.put("heuristic", heuristic);
+            params.put("randomness", randomness);
+            params.put("seed", seed);
             return params;
         }
     }
 
-    private record AStarConfig(String heuristic, double weight) implements RunConfig {
+    private record AStarConfig(String heuristic, double weight, double randomness, long seed) implements RunConfig {
         @Override
         public Map<String, Object> toParams() {
             Map<String, Object> params = new LinkedHashMap<>();
             params.put("heuristic", heuristic);
             params.put("weight", weight);
+            params.put("randomness", randomness);
+            params.put("seed", seed);
             return params;
         }
     }
 
     // For Beam, BULB, Beamstack - they only differ in solver class
-    private record BeamConfig(String heuristic, int beamWidth) implements RunConfig {
+    private record BeamConfig(String heuristic, int beamWidth, double randomness, long seed) implements RunConfig {
         @Override
         public Map<String, Object> toParams() {
             Map<String, Object> params = new LinkedHashMap<>();
             params.put("heuristic", heuristic);
             params.put("beam", beamWidth);
+            params.put("randomness", randomness);
+            params.put("seed", seed);
             return params;
         }
     }
@@ -185,7 +192,15 @@ public class Main {
     private static List<RunConfig> greedyConfigs(String[] args) {
         List<RunConfig> configs = new ArrayList<>();
         for (String heuristic : options(args, "--heuristic", "MAKESPAN")) {
-            configs.add(new GreedyConfig(heuristic.toUpperCase()));
+            for (String randomness : options(args, "--randomness", "0")) {
+                for (String seed : options(args, "--seed", "42")) {
+                    configs.add(new GreedyConfig(
+                            heuristic.toUpperCase(),
+                            Double.parseDouble(randomness),
+                            Long.parseLong(seed)
+                    ));
+                }
+            }
         }
         return configs;
     }
@@ -194,7 +209,16 @@ public class Main {
         List<RunConfig> configs = new ArrayList<>();
         double weight = Double.parseDouble(option(args, "--weight", "1.0"));
         for (String heuristic : options(args, "--heuristic", "REMAINING")) {
-            configs.add(new AStarConfig(heuristic.toUpperCase(), weight));
+            for (String randomness : options(args, "--randomness", "0")) {
+                for (String seed : options(args, "--seed", "42")) {
+                    configs.add(new AStarConfig(
+                            heuristic.toUpperCase(),
+                            weight,
+                            Double.parseDouble(randomness),
+                            Long.parseLong(seed)
+                    ));
+                }
+            }
         }
         return configs;
     }
@@ -203,7 +227,16 @@ public class Main {
         List<RunConfig> configs = new ArrayList<>();
         for (String heuristic : options(args, "--heuristic", "MAKESPAN")) {
             for (String beam : options(args, "--beam", "20")) {
-                configs.add(new BeamConfig(heuristic.toUpperCase(), Integer.parseInt(beam)));
+                for (String randomness : options(args, "--randomness", "0")) {
+                    for (String seed : options(args, "--seed", "42")) {
+                        configs.add(new BeamConfig(
+                                heuristic.toUpperCase(),
+                                Integer.parseInt(beam),
+                                Double.parseDouble(randomness),
+                                Long.parseLong(seed)
+                        ));
+                    }
+                }
             }
         }
         return configs;
@@ -262,6 +295,7 @@ public class Main {
         SchedulingProblem problem = loaded.problem();
         Map<String, Object> params = config.toParams();
         IHeuristic heuristic = buildHeuristic(config.heuristic(), problem);
+        heuristic = randomize(heuristic, config);
         SearchStatistics statistics = buildStatistics(algorithm);
         String runId = runId(instance, mode, algorithm, params);
         Files.createDirectories(outFolder);
@@ -305,6 +339,13 @@ public class Main {
             return new FjsspValidator().validateSchedule(fjssp, schedule);
         }
         return new ScheduleValidator().validateSchedule((JsspProblem) problem, schedule);
+    }
+
+    private static IHeuristic randomize(IHeuristic base, RunConfig config) {
+        if (config.randomness() <= 0.0) {
+            return base;
+        }
+        return new RandomizedWrapperHeuristic(base, config.randomness(), new Random(config.seed()));
     }
 
     private static IHeuristic buildHeuristic(String name, SchedulingProblem problem) {
