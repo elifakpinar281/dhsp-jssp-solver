@@ -19,10 +19,12 @@ public record RunLog(
         Integer makespan,
         boolean valid,
         long timeMs,
+        long cpuMs,
         long peakHeap,
         long expanded,
         int reached,
         int maxDepth,
+        boolean stoppedByLimit,
         List<TabuSearch.IterationSnapshot> iterations,
         List<ScheduledOperation> schedule,
         List<String> violations

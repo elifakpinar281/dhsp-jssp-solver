@@ -62,6 +62,9 @@ const demoanlage: InstanceMapping = {
 
 const mappings: Record<string, InstanceMapping> = {
     demoanlage,
+    demoanlage_25: demoanlage,
+    demoanlage_50: demoanlage,
+    demoanlage_100: demoanlage,
 };
 
 function stationOfBath(stationCapacity: number[], bathId: number): { station: number; slot: number; capacity: number } | null {

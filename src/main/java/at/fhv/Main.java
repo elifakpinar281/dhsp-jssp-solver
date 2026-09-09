@@ -47,6 +47,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
+import java.lang.management.ManagementFactory;
+import java.lang.management.ThreadMXBean;
 
 // zB ./gradlew run --args="--instance benchmarks/demoanlage.txt --mode FJSSP --algo GREEDY,BEAM,BULB,BEAMSTACK --beam 20,100,400"
 //   --instance benchmarks/demoanlage.txt
@@ -65,10 +67,8 @@ import java.util.Random;
 //   --out <folder>
 
 public class Main {
-    // Safety caps so search can not run forever
-    private static final long GREEDY_MAX_EXPANSIONS = 1_000_000;
-    private static final int GREEDY_MAX_NODES = 1_500_000;
-    private static final long BACKTRACKING_MAX_EXPANSIONS = 2_000_000;
+    private static final long EXPANSION_BUDGET = 7_500_000;
+    private static final int GREEDY_MAX_NODES = 2_500_000;
     private static final int WARM_START_BEAM_WIDTH = 100; // when --start WARM
     private static final int TABU_MAX_RESTARTS = 100;
     private static final DateTimeFormatter STAMP = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss");
@@ -150,7 +150,6 @@ public class Main {
         }
     }
 
-    // For Beam, BULB, Beamstack - they only differ in solver class
     private record BeamConfig(String heuristic, int beamWidth, double randomness, long seed) implements RunConfig {
         @Override
         public Map<String, Object> toParams() {
@@ -302,11 +301,14 @@ public class Main {
         statistics.enableLog(outFolder.resolve(runId + "-samples.csv").toString());
         ISearchAlgorithm solver = buildSolver(algorithm, problem, heuristic, statistics, config);
 
+        ThreadMXBean threadBean = ManagementFactory.getThreadMXBean();
         MemorySampler memorySampler = new MemorySampler();
         memorySampler.start();
-        long start = System.currentTimeMillis();
+        long cpuStart = threadBean.getCurrentThreadCpuTime();
+        long start = System.nanoTime();
         Schedule schedule = solver.solve(problem);
-        long elapsed = System.currentTimeMillis() - start;
+        long elapsed = (System.nanoTime() - start) / 1_000_000;
+        long cpuMs = (threadBean.getCurrentThreadCpuTime() - cpuStart) / 1_000_000;
         memorySampler.shutdown();
         statistics.closeLog();
 
@@ -323,15 +325,13 @@ public class Main {
         }
 
         return new RunLog(runId, LocalDateTime.now().toString(), instance, instanceKey(instance), algorithm, mode, params, loaded.jobCount(), loaded.machineCount(), makespan,
-                valid, elapsed, memorySampler.getPeak(), statistics.getLastExpansions(), statistics.getLastReached(), statistics.getLastMaxDepth(), history,
+                valid, elapsed, cpuMs, memorySampler.getPeak(), statistics.getLastExpansions(), statistics.getLastReached(), statistics.getLastMaxDepth(), statistics.isStoppedByLimit(), history,
                 schedule == null ? null : schedule.operations(), violations
         );
     }
 
     private static SearchStatistics buildStatistics(String algorithm) {
-        if (algorithm.equals("GREEDY") || algorithm.equals("ASTAR")) { return new SearchStatistics(1000, GREEDY_MAX_EXPANSIONS);}
-        if (algorithm.equals("BULB") || algorithm.equals("BEAMSTACK")) { return new SearchStatistics(1000, BACKTRACKING_MAX_EXPANSIONS);}
-        return new SearchStatistics();
+        return new SearchStatistics(1000, EXPANSION_BUDGET);
     }
 
     private static ValidationResult validate(SchedulingProblem problem, Schedule schedule) {

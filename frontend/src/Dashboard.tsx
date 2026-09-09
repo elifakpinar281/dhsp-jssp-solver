@@ -5,6 +5,7 @@ import type { RunLog, ShortlistEntry } from "./types";
 import { fetchRuns, saveShortlist } from "./data/api";
 import { bestRun } from "./analysis/grouping";
 import AlgorithmTabs from "./components/AlgorithmTabs";
+import InstanceTabs from "./components/InstanceTabs";
 import ParameterBar from "./components/ParameterBar";
 import RunPicker from "./components/RunPicker";
 import KpiCards from "./components/KpiCards";
@@ -44,6 +45,7 @@ export default function Dashboard() {
     const [shortlist, setShortlist] = useState<ShortlistEntry[]>([]);
     const [loading, setLoading] = useState<boolean>(true);
     const [error, setError] = useState<string | null>(null);
+    const [instanceKey, setInstanceKey] = useState<string>("");
     const [algorithm, setAlgorithm] = useState<string>("");
     const [params, setParams] = useState<Record<string, string>>({});
     const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
@@ -56,6 +58,7 @@ export default function Dashboard() {
     }, [mode]);
 
     const showRun = useCallback((run: RunLog) => {
+        setInstanceKey(run.instanceKey);
         setAlgorithm(run.algorithm);
         setParams(paramsOf(run));
         setSelectedRunId(run.runId);
@@ -87,12 +90,42 @@ export default function Dashboard() {
         return counts;
     }, [runs]);
 
+    const instanceOptions = useMemo(() => {
+        const byKey = new Map<string, { key: string; jobCount: number; runCount: number }>();
+        for (const run of modeRuns) {
+            const existing = byKey.get(run.instanceKey);
+            if (existing === undefined) {
+                byKey.set(run.instanceKey, { key: run.instanceKey, jobCount: run.jobCount, runCount: 1 });
+            } else {
+                existing.runCount += 1;
+            }
+        }
+        const list = Array.from(byKey.values());
+        list.sort((a, b) => a.jobCount - b.jobCount);
+        return list;
+    }, [modeRuns]);
+
+    const instanceRuns = useMemo(() => modeRuns.filter((run) => run.instanceKey === instanceKey), [modeRuns, instanceKey]);
+
     function switchMode(next: ProblemMode) {
         if (next === mode) { return; }
         setMode(next);
         const best = bestRun(runs.filter((run) => runMode(run) === next));
         if (best !== null) { showRun(best); }
         else {
+            setInstanceKey("");
+            setAlgorithm("");
+            setParams({});
+            setSelectedRunId(null);
+        }
+    }
+
+    function switchInstance(next: string) {
+        if (next === instanceKey) { return; }
+        const best = bestRun(modeRuns.filter((run) => run.instanceKey === next));
+        if (best !== null) { showRun(best); }
+        else {
+            setInstanceKey(next);
             setAlgorithm("");
             setParams({});
             setSelectedRunId(null);
@@ -109,7 +142,7 @@ export default function Dashboard() {
 
     const algorithms = useMemo(() => {
         const present: string[] = [];
-        for (const run of modeRuns) {
+        for (const run of instanceRuns) {
             if (!present.includes(run.algorithm)) { present.push(run.algorithm); }
         }
         present.sort((a, b) => {
@@ -118,9 +151,9 @@ export default function Dashboard() {
             return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
         });
         return present;
-    }, [modeRuns]);
+    }, [instanceRuns]);
 
-    const algorithmRuns = useMemo(() => modeRuns.filter((run) => run.algorithm === algorithm), [modeRuns, algorithm]);
+    const algorithmRuns = useMemo(() => instanceRuns.filter((run) => run.algorithm === algorithm), [instanceRuns, algorithm]);
     const configRuns = useMemo(() => algorithmRuns.filter((run) => matchesParams(run, params)), [algorithmRuns, params]);
     const bestConfigRun = useMemo(() => bestRun(configRuns), [configRuns]);
     const bestConfigRunId = bestConfigRun !== null ? bestConfigRun.runId : null;
@@ -133,7 +166,7 @@ export default function Dashboard() {
     }, [runs, selectedRunId, bestConfigRun]);
 
     function selectAlgorithm(next: string) {
-        const best = bestRun(modeRuns.filter((run) => run.algorithm === next));
+        const best = bestRun(instanceRuns.filter((run) => run.algorithm === next));
         if (best !== null) { showRun(best);}
         else {
             setAlgorithm(next);
@@ -203,6 +236,10 @@ export default function Dashboard() {
                 <div className="page">
                     <div className="controls-row">
                         <div className="control-block">
+                            <div className="section-label">Instance</div>
+                            <InstanceTabs instances={instanceOptions} selected={instanceKey} onSelect={switchInstance} />
+                        </div>
+                        <div className="control-block">
                             <div className="section-label">Algorithm</div>
                             <AlgorithmTabs algorithms={algorithms} selected={algorithm} onSelect={selectAlgorithm} />
                         </div>
@@ -214,7 +251,7 @@ export default function Dashboard() {
 
                     <RunPicker
                         configRuns={configRuns}
-                        allRuns={modeRuns}
+                        allRuns={instanceRuns}
                         selectedRunId={selectedRunId}
                         bestRunId={bestConfigRunId}
                         shortlistIds={shortlistIds}
@@ -225,6 +262,7 @@ export default function Dashboard() {
                     />
 
                     {selectedRun !== null ? <KpiCards run={selectedRun} /> : null}
+
 
                     {selectedRun !== null ? (
                         <section className="panel">
@@ -262,8 +300,8 @@ export default function Dashboard() {
                     ) : null}
 
                     <section className="panel">
-                        <div className="panel-title">Quality vs. runtime (all runs)</div>
-                        <ParetoScatter runs={modeRuns} />
+                        <div className="panel-title">Quality vs. runtime (this instance)</div>
+                        <ParetoScatter runs={instanceRuns} />
                     </section>
                 </div>
             ) : null}

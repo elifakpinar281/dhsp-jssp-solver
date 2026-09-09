@@ -21,7 +21,7 @@ public final class FjsspToJssp {
         for (FjsspJob fjsspJob : fjssp.getJobs()) {
             List<Operation> operations = new ArrayList<>();
             for (FjsspOperation operation : fjsspJob.operations()) {
-                int fullTime = operation.minimalProcessingTime(); // alle Baeder der Station identisch
+                int fullTime = operation.minimalProcessingTime();
                 operations.add(new Operation(operation.operationId(), operation.jobId(), operation.stationId(), fullTime, operation.maxDwellTime()));
             }
             jobs.add(new Job(fjsspJob.jobId(), operations));

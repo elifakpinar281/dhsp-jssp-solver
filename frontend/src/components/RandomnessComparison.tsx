@@ -11,8 +11,18 @@ interface Props {
     fjssp: boolean;
 }
 
+interface Box {
+    min: number;
+    q1: number;
+    median: number;
+    q3: number;
+    max: number;
+}
+
 interface Row {
     randomness: string;
+    makespans: number[];
+    box: Box;
     stats: GroupStats;
 }
 
@@ -20,6 +30,24 @@ function formatPercent(raw: string): string {
     const value = Number(raw);
     if (Number.isNaN(value)) { return raw; }
     return Math.round(value * 100) + "%";
+}
+
+function medianOf(sorted: number[], from: number, to: number): number {
+    const length = to - from;
+    const mid = from + Math.floor(length / 2);
+    if (length % 2 === 1) { return sorted[mid]; }
+    return (sorted[mid - 1] + sorted[mid]) / 2;
+}
+
+function quartiles(values: number[]): Box {
+    const sorted = values.slice().sort((a, b) => a - b);
+    const n = sorted.length;
+    const median = medianOf(sorted, 0, n);
+    const lowerTo = Math.floor(n / 2);
+    const upperFrom = n % 2 === 0 ? n / 2 : Math.floor(n / 2) + 1;
+    const q1 = medianOf(sorted, 0, lowerTo);
+    const q3 = medianOf(sorted, upperFrom, n);
+    return { min: sorted[0], q1, median, q3, max: sorted[n - 1] };
 }
 
 function matchesHeld(run: RunLog, selected: Record<string, string>): boolean {
@@ -48,28 +76,40 @@ export default function RandomnessComparison({ algorithmRuns, selected, fjssp }:
 
     const rows: Row[] = [];
     for (const value of values) {
+        const makespans: number[] = [];
         const matching: RunLog[] = [];
         for (const run of held) {
-            if (String(run.params["randomness"]) === value) { matching.push(run); }
+            if (String(run.params["randomness"]) !== value) { continue; }
+            matching.push(run);
+            if (run.valid && run.makespan !== null) { makespans.push(run.makespan); }
         }
-        rows.push({ randomness: value, stats: groupStats(matching) });
+        if (makespans.length === 0) { continue; }
+        rows.push({
+            randomness: value,
+            makespans,
+            box: quartiles(makespans),
+            stats: groupStats(matching),
+        });
+    }
+
+    if (rows.length < 2) {
+        return <div className="hint">Keine gueltigen Laeufe fuer den Vergleich.</div>;
     }
 
     let yMin = Number.POSITIVE_INFINITY;
     let yMax = Number.NEGATIVE_INFINITY;
     for (const row of rows) {
-        if (row.stats.count > 0 && row.stats.best < yMin) { yMin = row.stats.best; }
-        if (row.stats.count > 0 && row.stats.worst > yMax) { yMax = row.stats.worst; }
-    }
-    if (!Number.isFinite(yMin) || !Number.isFinite(yMax)) {
-        return <div className="hint">Keine gueltigen Laeufe fuer den Vergleich.</div>;
+        for (const value of row.makespans) {
+            if (value < yMin) { yMin = value; }
+            if (value > yMax) { yMax = value; }
+        }
     }
     if (yMin === yMax) { yMin -= 1; yMax += 1; }
-    const padding = (yMax - yMin) * 0.1;
+    const padding = (yMax - yMin) * 0.08;
     yMin -= padding;
     yMax += padding;
 
-    const width = 640;
+    const width = 560;
     const height = 300;
     const marginLeft = 60;
     const marginRight = 16;
@@ -77,10 +117,11 @@ export default function RandomnessComparison({ algorithmRuns, selected, fjssp }:
     const marginBottom = 40;
     const plotWidth = width - marginLeft - marginRight;
     const plotHeight = height - marginTop - marginBottom;
+    const slotWidth = plotWidth / rows.length;
+    const boxWidth = slotWidth * 0.5;
 
-    function xAt(index: number): number {
-        if (rows.length === 1) { return marginLeft + plotWidth / 2; }
-        return marginLeft + (plotWidth * index) / (rows.length - 1);
+    function xCenter(index: number): number {
+        return marginLeft + slotWidth * (index + 0.5);
     }
     function yAt(value: number): number {
         return marginTop + plotHeight * (1 - (value - yMin) / (yMax - yMin));
@@ -88,31 +129,23 @@ export default function RandomnessComparison({ algorithmRuns, selected, fjssp }:
 
     const algorithm = algorithmRuns.length > 0 ? algorithmRuns[0].algorithm : "";
     const color = algorithmColor(algorithm, fjssp);
-
-    let band = "";
-    for (let i = 0; i < rows.length; i++) {
-        band += (i === 0 ? "" : " ") + xAt(i) + "," + yAt(rows[i].stats.worst);
-    }
-    for (let i = rows.length - 1; i >= 0; i--) {
-        band += " " + xAt(i) + "," + yAt(rows[i].stats.best);
-    }
-
-    let meanLine = "";
-    for (let i = 0; i < rows.length; i++) {
-        meanLine += (i === 0 ? "M" : "L") + xAt(i) + " " + yAt(rows[i].stats.mean);
-    }
+    const bestColor = "#22c55e";
+    const axisColor = "#94a3b8";
+    const gridColor = "#e2e8f0";
 
     const ticks: number[] = [];
     for (let t = 0; t <= 4; t++) {
         ticks.push(yMin + ((yMax - yMin) * t) / 4);
     }
 
-    const axisColor = "#94a3b8";
-    const gridColor = "#e2e8f0";
+    let bestLine = "";
+    for (let i = 0; i < rows.length; i++) {
+        bestLine += (i === 0 ? "M" : "L") + xCenter(i) + " " + yAt(rows[i].box.min);
+    }
 
     return (
-        <div>
-            <svg viewBox={"0 0 " + width + " " + height} width="100%" role="img" aria-label="Makespan ueber Randomness">
+        <div style={{ maxWidth: width }}>
+            <svg viewBox={"0 0 " + width + " " + height} width="100%" role="img" aria-label="Makespan-Verteilung ueber Randomness">
                 {ticks.map((value, i) => (
                     <g key={"tick-" + i}>
                         <line x1={marginLeft} y1={yAt(value)} x2={width - marginRight} y2={yAt(value)} stroke={gridColor} strokeWidth={1} />
@@ -122,17 +155,31 @@ export default function RandomnessComparison({ algorithmRuns, selected, fjssp }:
                     </g>
                 ))}
 
-                <polygon points={band} fill={color} fillOpacity={0.15} stroke="none" />
-                <path d={meanLine} fill="none" stroke={color} strokeWidth={2} />
+                {rows.map((row, i) => {
+                    const cx = xCenter(i);
+                    const left = cx - boxWidth / 2;
+                    const yQ1 = yAt(row.box.q1);
+                    const yQ3 = yAt(row.box.q3);
+                    const boxTop = Math.min(yQ1, yQ3);
+                    const boxHeight = Math.max(1, Math.abs(yQ1 - yQ3));
 
-                {rows.map((row, i) => (
-                    <g key={"pt-" + row.randomness}>
-                        <circle cx={xAt(i)} cy={yAt(row.stats.mean)} r={3.5} fill={color} />
-                        <text x={xAt(i)} y={height - marginBottom + 20} textAnchor="middle" fontSize={11} fill={axisColor}>
-                            {formatPercent(row.randomness)}
-                        </text>
-                    </g>
-                ))}
+                    return (
+                        <g key={"box-" + row.randomness}>
+                            <line x1={cx} y1={yAt(row.box.min)} x2={cx} y2={yAt(row.box.max)} stroke={axisColor} strokeWidth={1} />
+                            <rect x={left} y={boxTop} width={boxWidth} height={boxHeight} fill={color} fillOpacity={0.18} stroke={color} strokeWidth={1.2} />
+                            <line x1={left} y1={yAt(row.box.median)} x2={left + boxWidth} y2={yAt(row.box.median)} stroke={color} strokeWidth={1.6} />
+                            {row.makespans.map((value, k) => {
+                                const offset = (k - (row.makespans.length - 1) / 2) * (boxWidth * 0.12);
+                                return <circle key={"pt-" + i + "-" + k} cx={cx + offset} cy={yAt(value)} r={2.2} fill={color} fillOpacity={0.55} />;
+                            })}
+                            <text x={cx} y={height - marginBottom + 20} textAnchor="middle" fontSize={11} fill={axisColor}>
+                                {formatPercent(row.randomness)}
+                            </text>
+                        </g>
+                    );
+                })}
+
+                <path d={bestLine} fill="none" stroke={bestColor} strokeWidth={1.5} strokeDasharray="4 3" />
 
                 <text
                     x={16}
@@ -145,6 +192,10 @@ export default function RandomnessComparison({ algorithmRuns, selected, fjssp }:
                     Makespan (s)
                 </text>
             </svg>
+
+            <div className="hint" style={{ marginTop: 4 }}>
+                Box = Q1–Q3, Linie = Median, Punkte = einzelne Seeds, gestrichelt = Best je Stufe.
+            </div>
 
             <table className="data-table" style={{ marginTop: 12 }}>
                 <thead>

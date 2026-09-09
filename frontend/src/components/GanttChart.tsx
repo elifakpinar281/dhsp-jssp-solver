@@ -65,7 +65,6 @@ export default function GanttChart({ run }: { run: RunLog }) {
     const tickStep = niceStep(makespan / 6);
     for (let t = 0; t <= makespan; t += tickStep) { ticks.push(t); }
 
-    // Gibt es ueberhaupt Operationen, bei denen das Teil laenger im Bad bleibt als die Bearbeitung?
     let dwellCount = 0;
     for (const op of schedule) {
         const leave = leaveByOp.get(op) ?? op.e;
@@ -89,12 +88,6 @@ export default function GanttChart({ run }: { run: RunLog }) {
                         />
                         Verweilzeit im Bad hervorheben
                     </label>
-                    <span className="legend-key">
-                        <span className="legend-swatch legend-solid" /> Bearbeitung
-                    </span>
-                    <span className="legend-key">
-                        <span className="legend-swatch legend-dwell" /> Verweilzeit (Teil bleibt im Bad)
-                    </span>
                 </div>
             ) : null}
             <div className="chart-scroll">
