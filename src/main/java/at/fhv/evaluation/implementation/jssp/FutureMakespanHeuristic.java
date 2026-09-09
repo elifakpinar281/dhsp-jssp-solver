@@ -25,7 +25,7 @@ public class FutureMakespanHeuristic implements IHeuristic {
         return remaining > 0 ? remaining : 0;
     }
 
-    // g: spätestes Ende einer bereits eingeplanten Operation.
+    // g: spätestes Ende einer bereits eingeplanten Operation
     private int pastMakespan(State state) {
         int makespan = 0;
         for (int available : state.jobAvailableTime()) { // jobAvailableTime -> wann ist der Job wieder bereit
