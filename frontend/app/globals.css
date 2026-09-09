@@ -25,12 +25,12 @@ body {
 }
 
 body.fjssp {
-    --bg: #fdf2f7;
-    --kpi: #fbe8f0;
-    --line: #f6dae7;
-    --accent: #cb6785;
-    --accent-soft: #fbe9ee;
-    --bar: #eea1b3;
+    --bg: #fdf7f9;
+    --kpi: #ffebf4;
+    --line: #ffedf2;
+    --accent: #790e33;
+    --accent-soft: #efdee4;
+    --bar: #790e33;
 }
 
 .app { max-width: 1040px; margin: 0 auto; padding: 28px 24px 64px; background: var(--bg); }
