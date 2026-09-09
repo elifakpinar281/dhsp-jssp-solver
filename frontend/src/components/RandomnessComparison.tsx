@@ -2,7 +2,6 @@ import type { RunLog } from "../types";
 import type { GroupStats } from "../analysis/metrics";
 import { distinctParamValues } from "../analysis/grouping";
 import { groupStats } from "../analysis/metrics";
-import { algorithmColor } from "../colors";
 import { formatInt, formatRuntime } from "../format";
 
 interface Props {
@@ -26,6 +25,13 @@ interface Row {
     stats: GroupStats;
 }
 
+const BOX = "#e11d48";
+const MEDIAN = "#881337";
+const BEST = "#f43f5e";
+const WHISKER = "#cf9aa8";
+const GRID = "#f6e5ea";
+const AXIS = "#a68b95";
+
 function formatPercent(raw: string): string {
     const value = Number(raw);
     if (Number.isNaN(value)) { return raw; }
@@ -42,6 +48,11 @@ function medianOf(sorted: number[], from: number, to: number): number {
 function quartiles(values: number[]): Box {
     const sorted = values.slice().sort((a, b) => a - b);
     const n = sorted.length;
+
+    if (n === 1) {
+        const only = sorted[0];
+        return { min: only, q1: only, median: only, q3: only, max: only };
+    }
     const median = medianOf(sorted, 0, n);
     const lowerTo = Math.floor(n / 2);
     const upperFrom = n % 2 === 0 ? n / 2 : Math.floor(n / 2) + 1;
@@ -58,7 +69,7 @@ function matchesHeld(run: RunLog, selected: Record<string, string>): boolean {
     return true;
 }
 
-export default function RandomnessComparison({ algorithmRuns, selected, fjssp }: Props) {
+export default function RandomnessComparison({ algorithmRuns, selected }: Props) {
     const held: RunLog[] = [];
     for (const run of algorithmRuns) {
         if (matchesHeld(run, selected)) { held.push(run); }
@@ -127,12 +138,6 @@ export default function RandomnessComparison({ algorithmRuns, selected, fjssp }:
         return marginTop + plotHeight * (1 - (value - yMin) / (yMax - yMin));
     }
 
-    const algorithm = algorithmRuns.length > 0 ? algorithmRuns[0].algorithm : "";
-    const color = algorithmColor(algorithm, fjssp);
-    const bestColor = "#22c55e";
-    const axisColor = "#94a3b8";
-    const gridColor = "#e2e8f0";
-
     const ticks: number[] = [];
     for (let t = 0; t <= 4; t++) {
         ticks.push(yMin + ((yMax - yMin) * t) / 4);
@@ -148,8 +153,8 @@ export default function RandomnessComparison({ algorithmRuns, selected, fjssp }:
             <svg viewBox={"0 0 " + width + " " + height} width="100%" role="img" aria-label="Makespan distribution across randomness levels">
                 {ticks.map((value, i) => (
                     <g key={"tick-" + i}>
-                        <line x1={marginLeft} y1={yAt(value)} x2={width - marginRight} y2={yAt(value)} stroke={gridColor} strokeWidth={1} />
-                        <text x={marginLeft - 8} y={yAt(value) + 4} textAnchor="end" fontSize={11} fill={axisColor}>
+                        <line x1={marginLeft} y1={yAt(value)} x2={width - marginRight} y2={yAt(value)} stroke={GRID} strokeWidth={1} />
+                        <text x={marginLeft - 8} y={yAt(value) + 4} textAnchor="end" fontSize={11} fill={AXIS}>
                             {formatInt(Math.round(value))}
                         </text>
                     </g>
@@ -165,28 +170,28 @@ export default function RandomnessComparison({ algorithmRuns, selected, fjssp }:
 
                     return (
                         <g key={"box-" + row.randomness}>
-                            <line x1={cx} y1={yAt(row.box.min)} x2={cx} y2={yAt(row.box.max)} stroke={axisColor} strokeWidth={1} />
-                            <rect x={left} y={boxTop} width={boxWidth} height={boxHeight} fill={color} fillOpacity={0.18} stroke={color} strokeWidth={1.2} />
-                            <line x1={left} y1={yAt(row.box.median)} x2={left + boxWidth} y2={yAt(row.box.median)} stroke={color} strokeWidth={1.6} />
+                            <line x1={cx} y1={yAt(row.box.min)} x2={cx} y2={yAt(row.box.max)} stroke={WHISKER} strokeWidth={1.2} />
+                            <rect x={left} y={boxTop} width={boxWidth} height={boxHeight} fill={BOX} fillOpacity={0.14} stroke={BOX} strokeWidth={1.4} />
+                            <line x1={left} y1={yAt(row.box.median)} x2={left + boxWidth} y2={yAt(row.box.median)} stroke={MEDIAN} strokeWidth={2} />
                             {row.makespans.map((value, k) => {
                                 const offset = (k - (row.makespans.length - 1) / 2) * (boxWidth * 0.12);
-                                return <circle key={"pt-" + i + "-" + k} cx={cx + offset} cy={yAt(value)} r={2.2} fill={color} fillOpacity={0.55} />;
+                                return <circle key={"pt-" + i + "-" + k} cx={cx + offset} cy={yAt(value)} r={2.2} fill={BOX} fillOpacity={0.55} />;
                             })}
-                            <text x={cx} y={height - marginBottom + 20} textAnchor="middle" fontSize={11} fill={axisColor}>
+                            <text x={cx} y={height - marginBottom + 20} textAnchor="middle" fontSize={11} fill={AXIS}>
                                 {formatPercent(row.randomness)}
                             </text>
                         </g>
                     );
                 })}
 
-                <path d={bestLine} fill="none" stroke={bestColor} strokeWidth={1.5} strokeDasharray="4 3" />
+                <path d={bestLine} fill="none" stroke={BEST} strokeWidth={1.6} strokeDasharray="4 3" />
 
                 <text
                     x={16}
                     y={marginTop + plotHeight / 2}
                     textAnchor="middle"
                     fontSize={11}
-                    fill={axisColor}
+                    fill={AXIS}
                     transform={"rotate(-90 16 " + (marginTop + plotHeight / 2) + ")"}
                 >
                     Makespan (s)
