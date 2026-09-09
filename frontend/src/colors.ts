@@ -13,16 +13,16 @@ const ALGO_COLORS: Record<string, string> = {
 };
 
 const ALGO_COLORS_FJSSP: Record<string, string> = {
-    GREEDY: "#f97316",
-    BEAM: "#ef4444",
-    BEAMSTACK: "#fb7185",
-    BULB: "#f59e0b",
-    TABU: "#b91c1c",
+    GREEDY: "#c92f67",
+    BEAM: "#c92f67",
+    BEAMSTACK: "#c92f67",
+    BULB: "#c92f67",
+    TABU: "#c92f67",
 };
 
 export function algorithmColor(algorithm: string, fjssp = false): string {
     const palette = fjssp ? ALGO_COLORS_FJSSP : ALGO_COLORS;
-    return palette[algorithm] ?? (fjssp ? "#d99a9a" : "#94a3b8");
+    return palette[algorithm] ?? (fjssp ? "#cc9191" : "#94a3b8");
 }
 
 export function utilizationColor(util: number): string {

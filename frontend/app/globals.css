@@ -100,11 +100,16 @@ body.fjssp {
 .star-button.on { color: #f5a623; border-color: #f5d59b; }
 .star-button:disabled { opacity: 0.5; cursor: not-allowed; }
 .checkbox { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); }
-.kpi-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 14px; }
-.kpi-card { background: var(--kpi); border-radius: 14px; padding: 16px 18px; }
+.kpi-block { display: flex; flex-direction: column; gap: 10px; }
+.kpi-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 14px; }
+.kpi-card { background: var(--kpi); border-radius: 8px; padding: 16px 18px; }
 .kpi-label { color: var(--muted); font-size: 13px; }
 .kpi-value { font-size: 22px; font-weight: 700; margin-top: 6px; letter-spacing: -0.01em; }
-.panel { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 18px; }
+.kpi-aside { display: flex; flex-wrap: wrap; gap: 8px; }
+.kpi-chip { display: inline-flex; align-items: baseline; gap: 6px; background: var(--kpi); border-radius: 10px; padding: 5px 12px; font-size: 12px; }
+.kpi-chip-label { color: var(--muted); }
+.kpi-chip-value { font-weight: 600; }
+.panel { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 18px; }
 .panel-title { font-weight: 600; font-size: 15px; margin-bottom: 14px; }
 .sub-title { font-weight: 600; font-size: 13px; color: var(--muted); margin: 14px 0 8px; }
 .analysis-divider { font-size: 13px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; margin: 10px 2px 0; }
@@ -132,7 +137,8 @@ body.fjssp {
 .tt-row b { color: #fff; font-weight: 600; }
 .heatmap-wrap { display: flex; flex-direction: column; }
 .bottleneck-list { display: flex; flex-direction: column; gap: 6px; }
-.bottleneck-row { display: grid; grid-template-columns: 220px 1fr 56px; align-items: center; gap: 10px; }
+.bottleneck-row { display: grid; grid-template-columns: 220px 1fr 56px; align-items: center; gap: 10px; cursor: help; }
+.heatmap rect { cursor: help; }
 .bn-name { font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .bn-bar-track { background: var(--bg); border-radius: 6px; height: 12px; overflow: hidden; }
 .bn-bar { display: block; height: 100%; }

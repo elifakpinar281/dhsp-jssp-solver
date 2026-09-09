@@ -86,7 +86,7 @@ export default function GanttChart({ run }: { run: RunLog }) {
                             checked={showDwell}
                             onChange={(event) => setShowDwell(event.target.checked)}
                         />
-                        Verweilzeit im Bad hervorheben
+                        Highlight dwell time in bath
                     </label>
                 </div>
             ) : null}
@@ -155,10 +155,10 @@ export default function GanttChart({ run }: { run: RunLog }) {
                 <div className="gantt-tooltip" style={{ left: hover.x + 14, top: hover.y + 14 }}>
                     <div className="tt-title" style={{ color: jobColor(hover.jobId) }}>Job {hover.jobId} &middot; Step {hover.step}/{hover.stepCount}</div>
                     <div className="tt-station">{machineName(run.instanceKey, hover.machineId, run.mode)}</div>
-                    <div className="tt-row">Start <b>{hover.start.toLocaleString("de-AT")} s</b> &rarr; Bearbeitung fertig <b>{hover.end.toLocaleString("de-AT")} s</b></div>
-                    <div className="tt-row">Bearbeitung <b>{(hover.end - hover.start).toLocaleString("de-AT")} s</b></div>
-                    <div className="tt-row">Verweilzeit im Bad <b>{(hover.leave - hover.end).toLocaleString("de-AT")} s</b></div>
-                    <div className="tt-row">Gesamt im Bad <b>{(hover.leave - hover.start).toLocaleString("de-AT")} s</b> (bis <b>{hover.leave.toLocaleString("de-AT")} s</b>)</div>
+                    <div className="tt-row">Start <b>{hover.start.toLocaleString("de-AT")} s</b> &rarr; processing done <b>{hover.end.toLocaleString("de-AT")} s</b></div>
+                    <div className="tt-row">Processing <b>{(hover.end - hover.start).toLocaleString("de-AT")} s</b></div>
+                    <div className="tt-row">Dwell in bath <b>{(hover.leave - hover.end).toLocaleString("de-AT")} s</b></div>
+                    <div className="tt-row">Total in bath <b>{(hover.leave - hover.start).toLocaleString("de-AT")} s</b> (until <b>{hover.leave.toLocaleString("de-AT")} s</b>)</div>
                 </div>
             ) : null}
         </div>

@@ -68,8 +68,8 @@ export default function RandomnessComparison({ algorithmRuns, selected, fjssp }:
     if (values.length < 2) {
         return (
             <div className="hint">
-                Fuer einen Randomness-Vergleich mehrere Stufen rechnen (z. B. 0, 0.05, 0.1, 0.2, 0.3)
-                und die uebrigen Parameter fix halten.
+                For a randomness comparison, run several levels (e.g. 0, 0.05, 0.1, 0.2, 0.3)
+                and keep the other parameters fixed.
             </div>
         );
     }
@@ -93,7 +93,7 @@ export default function RandomnessComparison({ algorithmRuns, selected, fjssp }:
     }
 
     if (rows.length < 2) {
-        return <div className="hint">Keine gueltigen Laeufe fuer den Vergleich.</div>;
+        return <div className="hint">No valid runs for this comparison.</div>;
     }
 
     let yMin = Number.POSITIVE_INFINITY;
@@ -109,8 +109,8 @@ export default function RandomnessComparison({ algorithmRuns, selected, fjssp }:
     yMin -= padding;
     yMax += padding;
 
-    const width = 560;
-    const height = 300;
+    const width = 900;
+    const height = 340;
     const marginLeft = 60;
     const marginRight = 16;
     const marginTop = 16;
@@ -118,7 +118,7 @@ export default function RandomnessComparison({ algorithmRuns, selected, fjssp }:
     const plotWidth = width - marginLeft - marginRight;
     const plotHeight = height - marginTop - marginBottom;
     const slotWidth = plotWidth / rows.length;
-    const boxWidth = slotWidth * 0.5;
+    const boxWidth = Math.min(slotWidth * 0.5, 90);
 
     function xCenter(index: number): number {
         return marginLeft + slotWidth * (index + 0.5);
@@ -144,8 +144,8 @@ export default function RandomnessComparison({ algorithmRuns, selected, fjssp }:
     }
 
     return (
-        <div style={{ maxWidth: width }}>
-            <svg viewBox={"0 0 " + width + " " + height} width="100%" role="img" aria-label="Makespan-Verteilung ueber Randomness">
+        <div>
+            <svg viewBox={"0 0 " + width + " " + height} width="100%" role="img" aria-label="Makespan distribution across randomness levels">
                 {ticks.map((value, i) => (
                     <g key={"tick-" + i}>
                         <line x1={marginLeft} y1={yAt(value)} x2={width - marginRight} y2={yAt(value)} stroke={gridColor} strokeWidth={1} />
@@ -194,7 +194,7 @@ export default function RandomnessComparison({ algorithmRuns, selected, fjssp }:
             </svg>
 
             <div className="hint" style={{ marginTop: 4 }}>
-                Box = Q1–Q3, Linie = Median, Punkte = einzelne Seeds, gestrichelt = Best je Stufe.
+                Box = Q1–Q3, line = median, dots = individual seeds, dashed = best per level.
             </div>
 
             <table className="data-table" style={{ marginTop: 12 }}>
