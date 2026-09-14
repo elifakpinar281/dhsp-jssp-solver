@@ -27,5 +27,12 @@ public record RunLog(
         boolean stoppedByLimit,
         List<TabuSearch.IterationSnapshot> iterations,
         List<ScheduledOperation> schedule,
-        List<String> violations
+        List<String> violations,
+        long seed,
+        int cores,
+        Integer lowerBound,
+        Double gapPercent,
+        long evaluations,
+        Long timeToBestMs,
+        long expansionsToBest
 ) {}

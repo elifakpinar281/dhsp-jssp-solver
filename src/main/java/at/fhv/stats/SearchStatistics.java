@@ -20,6 +20,12 @@ public class SearchStatistics {
     private BufferedWriter sampleWriter;
     private boolean headerWritten = false;
 
+    private long startNanos = 0;
+    private boolean foundSolution = false;
+    private int bestMakespanSoFar = Integer.MAX_VALUE;
+    private long nanosAtBest = 0;
+    private long expansionsAtBest = 0;
+
     public SearchStatistics() {
         this(1000, 0);
     }
@@ -47,6 +53,37 @@ public class SearchStatistics {
             writeSample(sample);
             lastSampledExpansions = expansions;
         }
+    }
+
+    public void startTimer() {
+        this.startNanos = System.nanoTime();
+    }
+
+    public void reportNewBest(int makespan) {
+        if (makespan < bestMakespanSoFar) {
+            bestMakespanSoFar = makespan;
+            nanosAtBest = System.nanoTime();
+            expansionsAtBest = lastExpansions;
+            foundSolution = true;
+        }
+    }
+
+    public boolean foundAnySolution() {
+        return foundSolution;
+    }
+
+    public long getTimeToBestMs() {
+        if (!foundSolution) {
+            return -1;
+        }
+        return (nanosAtBest - startNanos) / 1_000_000;
+    }
+
+    public long getExpansionsToBest() {
+        if (!foundSolution) {
+            return -1;
+        }
+        return expansionsAtBest;
     }
 
     public void enableLog(String path) throws IOException {
