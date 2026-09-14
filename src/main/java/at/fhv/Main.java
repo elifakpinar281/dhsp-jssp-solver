@@ -16,6 +16,7 @@ import at.fhv.model.jssp.JsspProblem;
 import at.fhv.model.fjssp.FjsspToJssp;
 import at.fhv.model.jssp.Schedule;
 import at.fhv.solver.ISearchAlgorithm;
+import at.fhv.solver.LowerBound;
 import at.fhv.solver.SchedulingProblem;
 import at.fhv.solver.validation.FjsspValidator;
 import at.fhv.solver.IStartDecoder;
@@ -290,45 +291,7 @@ public class Main {
         return result;
     }
 
-    private static RunLog solveOnce(String instance, Loaded loaded, String mode, String algorithm, RunConfig config, Path outFolder) throws IOException {
-        SchedulingProblem problem = loaded.problem();
-        Map<String, Object> params = config.toParams();
-        IHeuristic heuristic = buildHeuristic(config.heuristic(), problem);
-        heuristic = randomize(heuristic, config);
-        SearchStatistics statistics = buildStatistics(algorithm);
-        String runId = runId(instance, mode, algorithm, params);
-        Files.createDirectories(outFolder);
-        statistics.enableLog(outFolder.resolve(runId + "-samples.csv").toString());
-        ISearchAlgorithm solver = buildSolver(algorithm, problem, heuristic, statistics, config);
 
-        ThreadMXBean threadBean = ManagementFactory.getThreadMXBean();
-        MemorySampler memorySampler = new MemorySampler();
-        memorySampler.start();
-        long cpuStart = threadBean.getCurrentThreadCpuTime();
-        long start = System.nanoTime();
-        Schedule schedule = solver.solve(problem);
-        long elapsed = (System.nanoTime() - start) / 1_000_000;
-        long cpuMs = (threadBean.getCurrentThreadCpuTime() - cpuStart) / 1_000_000;
-        memorySampler.shutdown();
-        statistics.closeLog();
-
-        List<TabuSearch.IterationSnapshot> history = (solver instanceof TabuSearch tabu) ? tabu.getHistory() : null;
-
-        Integer makespan = null;
-        boolean valid = false;
-        List<String> violations = new ArrayList<>();
-        if (schedule != null) {
-            ValidationResult result = validate(problem, schedule);
-            makespan = computeMakespan(schedule);
-            valid = result.valid();
-            violations = result.violations();
-        }
-
-        return new RunLog(runId, LocalDateTime.now().toString(), instance, instanceKey(instance), algorithm, mode, params, loaded.jobCount(), loaded.machineCount(), makespan,
-                valid, elapsed, cpuMs, memorySampler.getPeak(), statistics.getLastExpansions(), statistics.getLastReached(), statistics.getLastMaxDepth(), statistics.isStoppedByLimit(), history,
-                schedule == null ? null : schedule.operations(), violations
-        );
-    }
 
     private static SearchStatistics buildStatistics(String algorithm) {
         return new SearchStatistics(1000, EXPANSION_BUDGET);
@@ -372,6 +335,64 @@ public class Main {
                 return new CombineHeuristics(new MakespanEstimateHeuristic(jsspProblem), List.of(new NextTMaxHeuristic(jsspProblem, slack), new NextTStartHeuristic(jsspProblem)));
             default: throw new IllegalArgumentException("Unknown heuristic: " + name);
         }
+    }
+
+    private static RunLog solveOnce(String instance, Loaded loaded, String mode, String algorithm, RunConfig config, Path outFolder) throws IOException {
+        SchedulingProblem problem = loaded.problem();
+        Map<String, Object> params = config.toParams();
+        IHeuristic base = buildHeuristic(config.heuristic(), problem);
+        IHeuristic randomized = randomize(base, config);
+        CountingHeuristic counting = new CountingHeuristic(randomized);
+
+        SearchStatistics statistics = buildStatistics(algorithm);
+        String runId = runId(instance, mode, algorithm, params);
+        Files.createDirectories(outFolder);
+        statistics.enableLog(outFolder.resolve(runId + "-samples.csv").toString());
+        ISearchAlgorithm solver = buildSolver(algorithm, problem, counting, statistics, config);
+
+        ThreadMXBean threadBean = ManagementFactory.getThreadMXBean();
+        MemorySampler memorySampler = new MemorySampler();
+        memorySampler.start();
+        long cpuStart = threadBean.getCurrentThreadCpuTime();
+        statistics.startTimer();
+        long start = System.nanoTime();
+        Schedule schedule = solver.solve(problem);
+        long elapsed = (System.nanoTime() - start) / 1_000_000;
+        long cpuMs = (threadBean.getCurrentThreadCpuTime() - cpuStart) / 1_000_000;
+        memorySampler.shutdown();
+        statistics.closeLog();
+
+        List<TabuSearch.IterationSnapshot> history = (solver instanceof TabuSearch tabu) ? tabu.getHistory() : null;
+
+        Integer makespan = null;
+        boolean valid = false;
+        List<String> violations = new ArrayList<>();
+        if (schedule != null) {
+            ValidationResult result = validate(problem, schedule);
+            makespan = computeMakespan(schedule);
+            valid = result.valid();
+            violations = result.violations();
+        }
+
+        int cores = 1;
+        long seed = config.seed();
+        long evaluations = counting.getCount();
+        Integer lowerBound = lowerBoundFor(problem);
+        Double gapPercent = null;
+        if (lowerBound != null && lowerBound > 0 && makespan != null) {
+            gapPercent = (makespan - lowerBound) * 100.0 / lowerBound;
+        }
+        if (gapPercent != null && gapPercent < 0) {
+            System.err.println("WARNING: lower bound is bigger than the makespan (" + runId + ") - the lower bound is wrong.");
+        }
+        Long timeToBestMs = statistics.foundAnySolution() ? statistics.getTimeToBestMs() : null;
+        long expansionsToBest = statistics.getExpansionsToBest();
+
+        return new RunLog(runId, LocalDateTime.now().toString(), instance, instanceKey(instance), algorithm, mode, params, loaded.jobCount(), loaded.machineCount(), makespan,
+                valid, elapsed, cpuMs, memorySampler.getPeak(), statistics.getLastExpansions(), statistics.getLastReached(), statistics.getLastMaxDepth(), statistics.isStoppedByLimit(), history,
+                schedule == null ? null : schedule.operations(), violations,
+                seed, cores, lowerBound, gapPercent, evaluations, timeToBestMs, expansionsToBest
+        );
     }
 
     private static ISearchAlgorithm buildSolver(String algorithm, SchedulingProblem problem, IHeuristic heuristic, SearchStatistics statistics, RunConfig config) {
@@ -498,5 +519,12 @@ public class Main {
             makespan = Math.max(makespan, operation.endTime());
         }
         return makespan;
+    }
+
+    private static Integer lowerBoundFor(SchedulingProblem problem) {
+        if (problem instanceof JsspProblem jssp) {
+            return LowerBound.forJssp(jssp);
+        }
+        return null;
     }
 }
