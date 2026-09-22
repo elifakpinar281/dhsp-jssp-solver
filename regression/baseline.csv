@@ -1,0 +1,20 @@
+heuristic MAKESPAN;states=7720 sum=1.30489844E8
+heuristic REMAINING;states=7720 sum=5.3304392E7
+heuristic NEXT-T-START;states=7720 sum=6.834052356621E12
+heuristic NEXT-T-MAX;states=7720 sum=68561.0
+heuristic COMBINED;states=7720 sum=1.3048984973337398E8
+heuristic ADMISSIBLE;states=7720 sum=1.30489844E8
+heuristic FJSSP MAKESPAN;states=7720 sum=1.59570441E8
+heuristic FJSSP NEXT-T-START;states=7720 sum=6.76007155945E12
+heuristic FJSSP NEXT-T-MAX;states=7720 sum=97468.0
+BEAM MAKESPAN w20 n25;makespan=20246 expanded=14084 evaluations=83701
+BEAM MAKESPAN w100 n50;makespan=38075 expanded=140119 evaluations=1064804
+BEAM NEXT-T-START w20 n25;makespan=17190 expanded=14153 evaluations=172291
+BULB MAKESPAN w20 n25;makespan=18206 expanded=7526 evaluations=50839
+BEAMSTACK MAKESPAN w20 n25 (3 sweeps);makespan=18206 expanded=22310 evaluations=151965
+BEAMSTACK ADMISSIBLE w20 n25 (3 sweeps);makespan=18206 expanded=22310 evaluations=151965
+GREEDY MAKESPAN n25 (200k nodes);makespan=18706 expanded=99630 evaluations=211361
+ASTAR REMAINING n25 (200k nodes);makespan=18706 expanded=99630 evaluations=211361
+FJSSP BEAM MAKESPAN w20 n25;makespan=26450 expanded=13688 evaluations=84404
+TABU STRIDE n25 (2 restarts);makespan=17853 steps=0
+TABU SEGMENT n25 (2 restarts);makespan=17853 steps=6

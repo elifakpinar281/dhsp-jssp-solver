@@ -9,6 +9,7 @@ import at.fhv.evaluation.implementation.fjssp.FjsspMakespanHeuristic;
 import at.fhv.evaluation.implementation.fjssp.FjsspNextTMaxHeuristic;
 import at.fhv.evaluation.implementation.fjssp.FjsspNextTStartHeuristic;
 import at.fhv.evaluation.implementation.fjssp.FjsspSlack;
+import at.fhv.evaluation.implementation.jssp.AdmissibleBoundHeuristic;
 import at.fhv.evaluation.implementation.jssp.FutureMakespanHeuristic;
 import at.fhv.evaluation.implementation.jssp.MakespanEstimateHeuristic;
 import at.fhv.evaluation.implementation.jssp.NextTMaxHeuristic;
@@ -29,6 +30,8 @@ import at.fhv.solver.impl.decoder.DwellStartDecoder;
 import at.fhv.solver.impl.greedy.GreedySearch;
 import at.fhv.solver.impl.tabu.ScheduleEvaluator;
 import at.fhv.solver.impl.tabu.TabuSearch;
+import at.fhv.solver.impl.tabu.INeighbourhood;
+import at.fhv.solver.impl.tabu.impl.SegmentSwapNeighbourhood;
 import at.fhv.solver.impl.tabu.impl.StrideNeighbourhood;
 import at.fhv.stats.SearchStatistics;
 
@@ -36,12 +39,17 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Random;
 
 public class RegressionCheck {
     private static final Path BASELINE = Path.of("regression", "baseline.csv");
     private static final String SMALL = "benchmarks/demoanlage_25.txt";
     private static final String MEDIUM = "benchmarks/demoanlage_50.txt";
+
     private record Result(String name, String value, long millis) {}
 
     public static void main(String[] args) throws IOException {
@@ -50,6 +58,7 @@ public class RegressionCheck {
         JsspProblem small = parser.parse(SMALL);
         JsspProblem medium = parser.parse(MEDIUM);
         FjsspProblem smallFjssp = parser.parseFjssp(SMALL);
+
         List<Result> results = new ArrayList<>();
 
         results.add(heuristicChecksum("heuristic MAKESPAN", small, new MakespanEstimateHeuristic(small)));
@@ -58,6 +67,7 @@ public class RegressionCheck {
         results.add(heuristicChecksum("heuristic NEXT-T-MAX", small, new NextTMaxHeuristic(small, new Slack(small))));
         Slack slack = new Slack(small);
         results.add(heuristicChecksum("heuristic COMBINED", small, new CombineHeuristics(new MakespanEstimateHeuristic(small), List.of(new NextTMaxHeuristic(small, slack), new NextTStartHeuristic(small)))));
+        results.add(heuristicChecksum("heuristic ADMISSIBLE", small, new AdmissibleBoundHeuristic(small)));
         results.add(heuristicChecksum("heuristic FJSSP MAKESPAN", smallFjssp, new FjsspMakespanHeuristic(smallFjssp)));
         results.add(heuristicChecksum("heuristic FJSSP NEXT-T-START", smallFjssp, new FjsspNextTStartHeuristic(smallFjssp)));
         results.add(heuristicChecksum("heuristic FJSSP NEXT-T-MAX", smallFjssp, new FjsspNextTMaxHeuristic(smallFjssp, new FjsspSlack(smallFjssp))));
@@ -66,10 +76,12 @@ public class RegressionCheck {
         results.add(runSearch("BEAM NEXT-T-START w20 n25", small, new NextTStartHeuristic(small), "BEAM", 20));
         results.add(runSearch("BULB MAKESPAN w20 n25", small, new MakespanEstimateHeuristic(small), "BULB", 20));
         results.add(runSearch("BEAMSTACK MAKESPAN w20 n25 (3 sweeps)", small, new MakespanEstimateHeuristic(small), "BEAMSTACK", 20));
+        results.add(runSearch("BEAMSTACK ADMISSIBLE w20 n25 (3 sweeps)", small, new AdmissibleBoundHeuristic(small), "BEAMSTACK", 20));
         results.add(runSearch("GREEDY MAKESPAN n25 (200k nodes)", small, new MakespanEstimateHeuristic(small), "GREEDY", 0));
         results.add(runSearch("ASTAR REMAINING n25 (200k nodes)", small, new FutureMakespanHeuristic(small), "ASTAR", 0));
         results.add(runSearch("FJSSP BEAM MAKESPAN w20 n25", smallFjssp, new FjsspMakespanHeuristic(smallFjssp), "BEAM", 20));
-        results.add(runTabu("TABU STRIDE n25 (2 restarts)", small));
+        results.add(runTabu("TABU STRIDE n25 (2 restarts)", small, new StrideNeighbourhood()));
+        results.add(runTabu("TABU SEGMENT n25 (2 restarts)", small, new SegmentSwapNeighbourhood(small)));
 
         printAndCompare(results, reset);
     }
@@ -86,7 +98,9 @@ public class RegressionCheck {
                 sum = sum + heuristic.evaluate(state);
                 count++;
                 List<Transition> transitions = problem.expand(state);
-                if (transitions.isEmpty()) { break; }
+                if (transitions.isEmpty()) {
+                    break;
+                }
                 state = transitions.get(random.nextInt(transitions.size())).state();
             }
         }
@@ -111,22 +125,30 @@ public class RegressionCheck {
         long start = System.nanoTime();
         Schedule schedule = solver.solve(problem);
         long millis = (System.nanoTime() - start) / 1_000_000;
-        String value = "makespan=" + makespanOf(schedule) + " expanded=" + statistics.getLastExpansions() + " evaluations=" + counting.getCount();
+
+        String value = "makespan=" + makespanOf(schedule)
+                + " expanded=" + statistics.getLastExpansions()
+                + " evaluations=" + counting.getCount();
         return new Result(name, value, millis);
     }
 
-    private static Result runTabu(String name, JsspProblem problem) {
+    private static Result runTabu(String name, JsspProblem problem, INeighbourhood neighbourhood) {
         SearchStatistics statistics = new SearchStatistics(1000, 0);
-        TabuSearch tabu = new TabuSearch(new ScheduleEvaluator(problem), new StrideNeighbourhood(), 10, 2, new DwellStartDecoder(new Random(42)), 42, 2, 0L, 2, statistics);
+        TabuSearch tabu = new TabuSearch(new ScheduleEvaluator(problem), neighbourhood, 10, 2,
+                new DwellStartDecoder(new Random(42)), 42, 2, 0L, 2, statistics);
+
         long start = System.nanoTime();
         Schedule schedule = tabu.solve(problem);
         long millis = (System.nanoTime() - start) / 1_000_000;
+
         String value = "makespan=" + makespanOf(schedule) + " steps=" + tabu.getHistory().size();
         return new Result(name, value, millis);
     }
 
     private static String makespanOf(Schedule schedule) {
-        if (schedule == null) { return "none"; }
+        if (schedule == null) {
+            return "none";
+        }
         int makespan = 0;
         for (ScheduledOperation operation : schedule.operations()) {
             makespan = Math.max(makespan, operation.endTime());
@@ -138,7 +160,7 @@ public class RegressionCheck {
         if (reset || !Files.exists(BASELINE)) {
             writeBaseline(results);
             System.out.println();
-            System.out.println("Baseline saved to " + BASELINE.toAbsolutePath());
+            System.out.println("Baseline written to " + BASELINE.toAbsolutePath());
             for (Result result : results) {
                 System.out.printf("  %-40s %8d ms   %s%n", result.name(), result.millis(), result.value());
             }
@@ -151,23 +173,25 @@ public class RegressionCheck {
         for (Result result : results) {
             String expected = baseline.get(result.name());
             String status;
-            if (expected == null) { status = "NEW  ";
-            } else if (expected.equals(result.value())) { status = "OK   ";
+            if (expected == null) {
+                status = "NEW  ";
+            } else if (expected.equals(result.value())) {
+                status = "OK   ";
             } else {
                 status = "DIFF ";
                 differences++;
             }
-            System.out.printf("%s %-40s %8d ms  %s%n", status, result.name(), result.millis(), result.value());
+            System.out.printf("%s %-40s %8d ms   %s%n", status, result.name(), result.millis(), result.value());
             if (status.equals("DIFF ")) {
-                System.out.printf(" %-40s expected: %s%n", "", expected);
+                System.out.printf("      %-40s             expected: %s%n", "", expected);
             }
         }
         System.out.println();
         if (differences == 0) {
             System.out.println("Everything matches the baseline.");
         } else {
-            System.out.println(differences + " differences. For performance steps this is a bug.");
-            System.out.println("If the step intentionally changes behaviour: ./gradlew regression --args=\"--reset\"");
+            System.out.println(differences + " differences. For a performance step this is a bug.");
+            System.out.println("If the step changes behaviour on purpose: ./gradlew regression --args=\"--reset\"");
         }
     }
 
