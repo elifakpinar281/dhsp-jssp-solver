@@ -5,6 +5,7 @@ import at.fhv.model.jssp.Schedule;
 import at.fhv.solver.ISearchAlgorithm;
 import at.fhv.solver.IStartDecoder;
 import at.fhv.solver.SchedulingProblem;
+import at.fhv.stats.SearchStatistics;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -36,6 +37,8 @@ public class TabuSearch implements ISearchAlgorithm {
     private final int maxRestarts;
     private final int kickThreshold;
     private final long timeBudgetMs;
+    private final SearchStatistics statistics;
+    private long evaluations = 0;
 
     private boolean verbose = false;
     private final List<IterationSnapshot> history = new ArrayList<>();
@@ -57,6 +60,11 @@ public class TabuSearch implements ISearchAlgorithm {
     }
 
     public TabuSearch(ScheduleEvaluator scheduleEvaluator, INeighbourhood neighbourhood, int tenure, int maxIterationsWithoutImprovement, IStartDecoder startDecoder, long seed, int maxRestarts, long timeBudgetMs, int kickThreshold) {
+        this(scheduleEvaluator, neighbourhood, tenure, maxIterationsWithoutImprovement, startDecoder, seed, maxRestarts, timeBudgetMs, kickThreshold, new SearchStatistics());
+    }
+
+    public TabuSearch(ScheduleEvaluator scheduleEvaluator, INeighbourhood neighbourhood, int tenure, int maxIterationsWithoutImprovement, IStartDecoder startDecoder, long seed, int maxRestarts, long timeBudgetMs, int kickThreshold, SearchStatistics statistics) {
+        this.statistics = statistics;
         this.scheduleEvaluator = scheduleEvaluator;
         this.neighbourhood = neighbourhood;
         this.tenure = tenure;
@@ -96,10 +104,12 @@ public class TabuSearch implements ISearchAlgorithm {
         }
         history.clear();
         random.setSeed(seed);
+        evaluations = 0;
+        statistics.setTotalOperations(problem.totalOperations());
 
         SearchState s = new SearchState();
         s.current = startDecoder.decode(problem);
-        s.currentResult = scheduleEvaluator.evaluate(s.current);
+        s.currentResult = evaluateFull(s.current);
 
         s.best = null;
         s.bestMakespan = Integer.MAX_VALUE;
@@ -114,7 +124,8 @@ public class TabuSearch implements ISearchAlgorithm {
 
         while (!isFinished(s, deadline)) {
             iteration++;
-            step(s, iteration);
+            step(s, iteration, deadline);
+            statistics.record(evaluations, 0, 0, 0);
 
             if (s.noImprovement >= kickThreshold) {
                 destroy(s, problem);
@@ -135,7 +146,7 @@ public class TabuSearch implements ISearchAlgorithm {
         return s.restarts >= maxRestarts && s.noImprovement >= maxIterationsWithoutImprovement;
     }
 
-    private void step(SearchState s, int iteration) {
+    private void step(SearchState s, int iteration, long deadline) {
         List<Move> neighbours = neighbourhood.generate(s.currentResult, s.current);
         if (neighbours.isEmpty()) {
             s.noImprovement++;
@@ -148,9 +159,12 @@ public class TabuSearch implements ISearchAlgorithm {
         int bestValidMakespan = Integer.MAX_VALUE;
 
         boolean anyValid = false;
+        int[] order = scheduleEvaluator.orderByStart(s.currentResult);
 
         for (Move move : neighbours) {
-            ScheduleEvaluator.Result result = scheduleEvaluator.evaluateResult(s.current.applied(move));
+            if (timeBudgetMs > 0 && System.currentTimeMillis() >= deadline) { break; }
+
+            ScheduleEvaluator.Result result = evaluateMakespan(s.current.applied(move), order);
             if (!result.valid()) { continue; }
             anyValid = true;
 
@@ -184,7 +198,7 @@ public class TabuSearch implements ISearchAlgorithm {
         Move chosenMove = leastUsed(pool, s.frequency);
 
         s.current = s.current.applied(chosenMove);
-        s.currentResult = scheduleEvaluator.evaluate(s.current);
+        s.currentResult = evaluateFull(s.current);
         s.tabu.setTabu(chosenMove.getAttribute(), iteration + dynamicTenure());
         s.frequency.merge(chosenMove.getAttribute(), 1, Integer::sum);
 
@@ -231,6 +245,7 @@ public class TabuSearch implements ISearchAlgorithm {
 
         s.best = s.current.copy();
         s.bestMakespan = s.currentResult.makespan();
+        statistics.reportNewBest(s.bestMakespan, evaluations);
         return true;
     }
 
@@ -246,7 +261,7 @@ public class TabuSearch implements ISearchAlgorithm {
             kick(s);
         }
 
-        s.currentResult = scheduleEvaluator.evaluate(s.current);
+        s.currentResult = evaluateFull(s.current);
         s.tabu = new TabuList();
         s.noImprovement = 0;
 
@@ -258,7 +273,7 @@ public class TabuSearch implements ISearchAlgorithm {
     }
 
     private void kick(SearchState s) {
-        ScheduleEvaluator.EvaluationResult result = scheduleEvaluator.evaluate(s.current);
+        ScheduleEvaluator.EvaluationResult result = evaluateFull(s.current);
 
         for (int i = 0; i < KICK_STRENGTH; i++) {
             if (!result.valid()) { return; }
@@ -271,12 +286,27 @@ public class TabuSearch implements ISearchAlgorithm {
                 Move move = moves.get(random.nextInt(moves.size()));
                 MachineSequences candidate = s.current.applied(move);
 
-                if (!scheduleEvaluator.evaluateResult(candidate).valid()) { continue; }
+                if (!evaluateMakespan(candidate).valid()) { continue; }
                 s.current = candidate;
                 applied = true;
             }
             if (!applied) { return; }
-            result = scheduleEvaluator.evaluate(s.current);
+            result = evaluateFull(s.current);
         }
+    }
+
+    private ScheduleEvaluator.Result evaluateMakespan(MachineSequences sequences) {
+        evaluations++;
+        return scheduleEvaluator.evaluateResult(sequences);
+    }
+
+    private ScheduleEvaluator.Result evaluateMakespan(MachineSequences sequences, int[] order) {
+        evaluations++;
+        return scheduleEvaluator.evaluateResult(sequences, order);
+    }
+
+    private ScheduleEvaluator.EvaluationResult evaluateFull(MachineSequences sequences) {
+        evaluations++;
+        return scheduleEvaluator.evaluate(sequences);
     }
 }

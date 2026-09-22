@@ -69,20 +69,23 @@ public class ScheduleEvaluator {
             int makespan,
             boolean valid,
             List<Operation> criticalPath,
-            Map<Operation, Integer> head
-    ) {
-    }
+            int[] head
+    ) {}
 
     public record Result(boolean valid, int makespan) {}
 
     public Result evaluateResult (MachineSequences sequences) {
+        return evaluateResult(sequences, null);
+    }
+
+    public Result evaluateResult (MachineSequences sequences, int[] order) {
         if (operationCount == 0) { return new Result (true, 0); }
 
         int[] machinePredecessor = new int[operationCount];
         int[] machineSuccessor = new int[operationCount];
         buildLinks(sequences, machinePredecessor, machineSuccessor);
 
-        int[] start = solveWithLags(machinePredecessor, machineSuccessor);
+        int[] start = solveWithLags(machinePredecessor, machineSuccessor, order);
         if (start == null) { return new Result(false, Integer.MAX_VALUE); }
 
         int makespan = 0;
@@ -94,17 +97,17 @@ public class ScheduleEvaluator {
 
     public EvaluationResult evaluate(MachineSequences sequences) {
         if (operationCount == 0) {
-            return new EvaluationResult(0, true, new ArrayList<>(), new HashMap<>());
+            return new EvaluationResult(0, true, new ArrayList<>(), new int[0]);
         }
 
         int[] machinePredecessor = new int[operationCount];
         int[] machineSuccessor = new int[operationCount];
         buildLinks(sequences, machinePredecessor, machineSuccessor);
 
-        int[] start = solveWithLags(machinePredecessor, machineSuccessor);
+        int[] start = solveWithLags(machinePredecessor, machineSuccessor, null);
 
         if (start == null) {
-            return new EvaluationResult(Integer.MAX_VALUE, false, new ArrayList<>(), new HashMap<>());
+            return new EvaluationResult(Integer.MAX_VALUE, false, new ArrayList<>(), new int[0]);
         }
 
         int makespan = 0;
@@ -113,7 +116,24 @@ public class ScheduleEvaluator {
         }
 
         List<Operation> criticalPath = criticalPath(start, machinePredecessor, machineSuccessor, makespan);
-        return new EvaluationResult(makespan, true, criticalPath, toMap(start));
+        return new EvaluationResult(makespan, true, criticalPath, start);
+    }
+
+    public int[] orderByStart(EvaluationResult result) {
+        int[] head = result.head();
+        if (head.length != operationCount) { return null; }
+
+        Integer[] indices = new Integer[operationCount];
+        for (int i = 0; i < operationCount; i++) {
+            indices[i] = i;
+        }
+        Arrays.sort(indices, (a, b) -> Integer.compare(head[a], head[b]));
+
+        int[] order = new int[operationCount];
+        for (int i = 0; i < operationCount; i++) {
+            order[i] = indices[i];
+        }
+        return order;
     }
 
     private int index(Operation operation) {
@@ -137,11 +157,16 @@ public class ScheduleEvaluator {
         }
     }
 
-    private int[] solveWithLags(int[] machinePredecessor, int[] machineSuccessor) {
+    private int[] solveWithLags(int[] machinePredecessor, int[] machineSuccessor, int[] order) {
         int n = operationCount;
         int[] start = new int[n];
         int[] pathEdges = new int[n];
         boolean[] inQueue = new boolean[n];
+        int[] parent = new int[n];
+        Arrays.fill(parent, NONE);
+        int[] mark = new int[n];
+        int stamp = 0;
+        long relaxations = 0;
 
         int[] queue = new int[n + 1];
         int queueHead = 0;
@@ -149,10 +174,11 @@ public class ScheduleEvaluator {
         int queueSize = 0;
 
         for (int i = 0; i < n; i++) {
-            queue[queueTail] = i;
+            int operation = (order == null) ? i : order[i];
+            queue[queueTail] = operation;
             queueTail = (queueTail + 1) % (n + 1);
             queueSize++;
-            inQueue[i] = true;
+            inQueue[operation] = true;
         }
 
         int[] targets = new int[4];
@@ -198,8 +224,21 @@ public class ScheduleEvaluator {
                 if (candidate <= start[target]) { continue; }
 
                 start[target] = candidate;
+                parent[target] = current;
+                relaxations++;
                 pathEdges[target] = pathEdges[current] + 1;
                 if (pathEdges[target] >= n) { return null; }
+                if (relaxations % n == 0) {
+                    stamp++;
+                    int node = target;
+                    int steps = 0;
+                    while (node != NONE && steps <= n) {
+                        if (mark[node] == stamp) { return null; }
+                        mark[node] = stamp;
+                        node = parent[node];
+                        steps++;
+                    }
+                }
 
                 if (!inQueue[target]) {
                     queue[queueTail] = target;
@@ -275,19 +314,11 @@ public class ScheduleEvaluator {
         return start[source] + weight == start[target];
     }
 
-    private Map<Operation, Integer> toMap(int[] values) {
-        Map<Operation, Integer> map = new HashMap<>();
-        for (int i = 0; i < operationCount; i++) {
-            map.put(operations.get(i), values[i]);
-        }
-        return map;
-    }
-
     public Schedule toSchedule(EvaluationResult result) {
         List<ScheduledOperation> scheduledOperations = new ArrayList<>();
         for (Job job : jsspProblem.getJobs()) {
             for (Operation operation : job.operations()) {
-                int start = result.head().get(operation);
+                int start = result.head()[index(operation)];
                 int end = start + operation.processingTime();
                 scheduledOperations.add(new ScheduledOperation(operation.jobId(), operation.machineId(), start, end));
             }

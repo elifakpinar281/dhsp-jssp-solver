@@ -16,15 +16,23 @@ public class GreedySearch implements ISearchAlgorithm {
     private final IHeuristic heuristic;
     private final SearchStatistics statistics;
     private final int maxNodes;
+    private final boolean completeOnLimit;
+
+    private record QueueEntry(Node node, int depth) {}
 
     public GreedySearch(IHeuristic heuristic) {
         this(heuristic, new SearchStatistics(), DEFAULT_MAX_NODES);
     }
 
     public GreedySearch(IHeuristic heuristic, SearchStatistics statistics, int maxNodes) {
+        this(heuristic, statistics, maxNodes, true);
+    }
+
+    public GreedySearch(IHeuristic heuristic, SearchStatistics statistics, int maxNodes, boolean completeOnLimit) {
         this.heuristic = heuristic;
         this.statistics = statistics;
         this.maxNodes = maxNodes;
+        this.completeOnLimit = completeOnLimit;
     }
 
     @Override
@@ -33,52 +41,61 @@ public class GreedySearch implements ISearchAlgorithm {
         double heuristicValue = heuristic.evaluate(initialState);
         Node initialNode = new Node(initialState, null, heuristicValue, null);
 
-        PriorityQueue<Node> frontier = new PriorityQueue<>((n1, n2) -> {
-            int byHeuristic = Double.compare(n1.heuristicValue(), n2.heuristicValue());
+        PriorityQueue<QueueEntry> frontier = new PriorityQueue<>((e1, e2) -> {
+            int byHeuristic = Double.compare(e1.node().heuristicValue(), e2.node().heuristicValue());
             if (byHeuristic != 0) {
                 return byHeuristic;
             }
-            return Integer.compare(scheduledCount(n2.state()), scheduledCount(n1.state()));
+            return Integer.compare(e2.depth(), e1.depth());
         });
 
         Set<State> reached = new HashSet<>();
         reached.add(initialState);
-        frontier.add(initialNode);
+        frontier.add(new QueueEntry(initialNode, scheduledCount(initialState)));
 
         statistics.setTotalOperations(problem.totalOperations());
         long expanded = 0;
         int maxDepth = 0;
         Node deepestNode = initialNode;
+        int deepestDepth = 0;
 
         while (!frontier.isEmpty()) {
-            Node current = frontier.poll();
+            QueueEntry entry = frontier.poll();
+            Node current = entry.node();
 
             if (problem.isGoal(current.state())) {
                 statistics.record(expanded, reached.size(), frontier.size(), maxDepth);
+                statistics.reportNewBest(makespanOf(current.state()), expanded);
                 return new Schedule(buildSchedule(current));
             }
             expanded++;
 
-            int depth = scheduledCount(current.state());
+            int depth = entry.depth();
             if (depth > maxDepth) {
                 maxDepth = depth;
             }
-            if (depth > scheduledCount(deepestNode.state())) {
+            if (depth > deepestDepth) {
                 deepestNode = current;
+                deepestDepth = depth;
             }
 
             for (Node child : expand(current, problem)) {
-                State childState = child.state();
-                if (!reached.contains(childState)) {
-                    reached.add(childState);
-                    frontier.add(child);
+                if (reached.add(child.state())) {
+                    frontier.add(new QueueEntry(child, scheduledCount(child.state())));
                 }
             }
             statistics.record(expanded, reached.size(), frontier.size(), maxDepth);
 
             if (statistics.limitReached(expanded) || reached.size() >= maxNodes) {
                 statistics.markStoppedByLimit();
-                return completeGreedily(deepestNode, problem);
+                if (!completeOnLimit) {
+                    return null;
+                }
+                Schedule completed = completeGreedily(deepestNode, problem);
+                if (completed != null) {
+                    statistics.reportNewBest(makespanOf(completed), expanded);
+                }
+                return completed;
             }
         }
         return null;
@@ -109,6 +126,22 @@ public class GreedySearch implements ISearchAlgorithm {
             children.add(new Node(transition.state(), node, heuristicValue, transition.scheduledOperations()));
         }
         return children;
+    }
+
+    private int makespanOf(State state) {
+        int makespan = 0;
+        for (int available : state.jobAvailableTime()) {
+            makespan = Math.max(makespan, available);
+        }
+        return makespan;
+    }
+
+    private int makespanOf(Schedule schedule) {
+        int makespan = 0;
+        for (ScheduledOperation operation : schedule.operations()) {
+            makespan = Math.max(makespan, operation.endTime());
+        }
+        return makespan;
     }
 
     private int scheduledCount(State state) {

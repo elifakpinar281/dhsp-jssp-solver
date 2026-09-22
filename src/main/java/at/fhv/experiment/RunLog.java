@@ -20,7 +20,11 @@ public record RunLog(
         boolean valid,
         long timeMs,
         long cpuMs,
+        long processCpuMs,
+        long gcMs,
         long peakHeap,
+        long peakHeapKb,
+        boolean peakHeapAfterGc,
         long expanded,
         int reached,
         int maxDepth,
@@ -34,5 +38,6 @@ public record RunLog(
         Double gapPercent,
         long evaluations,
         Long timeToBestMs,
-        long expansionsToBest
+        long expansionsToBest,
+        long timeLimitMs
 ) {}

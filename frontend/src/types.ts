@@ -21,8 +21,12 @@ export interface RunLog {
     valid: boolean;
     timeMs: number;
     cpuMs: number;
+    processCpuMs?: number;
+    gcMs?: number;
     peakHeap: number;
     peakHeapKb?: number;
+    peakHeapAfterGc?: boolean;
+    timeToBestMs?: number | null;
     expanded: number;
     reached: number;
     maxDepth: number;

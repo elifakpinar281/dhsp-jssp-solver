@@ -21,6 +21,7 @@ public class BULBSearch implements ISearchAlgorithm {
     private final int maxStored;
     private final int maxDiscrepancies;
     private final Map<State, BULBNode> hashtable = new LinkedHashMap<>();
+    private final List<List<BULBNode>> sliceAtDepth = new ArrayList<>();   // sliceAtDepth.get(d) = aktueller Slice auf Tiefe d
     private SchedulingProblem problem;
     private long expanded;
     private int maxDepthReached;
@@ -48,17 +49,18 @@ public class BULBSearch implements ISearchAlgorithm {
 
         State initialState = problem.createInitialState();
         BULBNode root = new BULBNode(initialState, null, null, heuristic.evaluate(initialState), 0 );
-        hashtable.clear();
-        hashtable.put(initialState, root);
 
         for (int discrepancies = 0; discrepancies <= maxDiscrepancies; discrepancies++) {
             hashtable.clear();
             hashtable.put(initialState, root);
+            sliceAtDepth.clear();
+            setSlice(0, new ArrayList<>(List.of(root)));
             foundGoal = null;
             double pathLength = BULBProbe(0, discrepancies);
 
             statistics.record(expanded, hashtable.size(), 0, maxDepthReached);
             if (pathLength < NO_PATH && foundGoal != null) {
+                statistics.reportNewBest(makespanOf(foundGoal.state()), expanded);
                 return new Schedule(buildSchedule(foundGoal));
             }
             if(statistics.limitReached(expanded)) {
@@ -70,22 +72,27 @@ public class BULBSearch implements ISearchAlgorithm {
     }
 
     private double BULBProbe (int depth, int discrepancies) {
-        BULBSliceResult result = nextSlice(depth, 0);
-        if (result.value() >= 0) return result.value();
-
         if (discrepancies == 0) {
+            BULBSliceResult result = nextSlice(depth, 0, null);
+            if (result.value() >= 0) return result.value();
             if (result.slice().isEmpty()) { return NO_PATH; }
             double pathLength = BULBProbe(depth + 1, 0);
             removeFomTable(result.slice());
             return pathLength;
         }
 
+        if (statistics.limitReached(expanded)) { return NO_PATH; }
+        List<BULBNode> successors = generateSucessors(layerAt(depth));
+
+        BULBSliceResult result = nextSlice(depth, 0, successors);
+        if (result.value() >= 0) return result.value();
+
         if (!result.slice().isEmpty()) {
             removeFomTable(result.slice());
             int index = result.index();
 
             while (true) {
-                BULBSliceResult alternative = nextSlice(depth, index);
+                BULBSliceResult alternative = nextSlice(depth, index, successors);
                 index = alternative.index();
 
                 if (alternative.value() >= 0) {
@@ -102,7 +109,8 @@ public class BULBSearch implements ISearchAlgorithm {
             }
         }
 
-        BULBSliceResult best = nextSlice(depth, 0);
+        BULBSliceResult best = nextSlice(depth, 0, successors);
+        successors = null;
         if (best.value() >= 0) {return best.value(); }
         if (best.slice().isEmpty()) { return NO_PATH; }
         double pathLength =BULBProbe(depth + 1, discrepancies);
@@ -110,9 +118,13 @@ public class BULBSearch implements ISearchAlgorithm {
         return pathLength;
     }
 
-    private BULBSliceResult nextSlice(int depth, int index) {
-        List<BULBNode> currentLayer = layerAt(depth);
-        List<BULBNode> successors = generateSucessors(currentLayer);
+    private BULBSliceResult nextSlice(int depth, int index, List<BULBNode> successors) {
+        if (statistics.limitReached(expanded)) {
+            return new BULBSliceResult(new ArrayList<>(), NO_PATH, -1);
+        }
+        if (successors == null) {
+            successors = generateSucessors(layerAt(depth));
+        }
         if (successors.isEmpty() || index >= successors.size()) {
             return new BULBSliceResult(new ArrayList<>(), NO_PATH, -1);
         }
@@ -122,7 +134,6 @@ public class BULBSearch implements ISearchAlgorithm {
             return new BULBSliceResult(new ArrayList<>(), GOAL_FOUND, -1);
         }
 
-        expanded++;
         if (depth + 1 > maxDepthReached) { maxDepthReached = depth + 1; }
         statistics.record(expanded, hashtable.size(), Math.min(beamWidth, successors.size()), maxDepthReached);
 
@@ -140,11 +151,13 @@ public class BULBSearch implements ISearchAlgorithm {
             }
             i++;
         }
+        setSlice(depth + 1, slice);
         return new BULBSliceResult(slice, -1.0, i);
     }
 
     private List<BULBNode> generateSucessors(List<BULBNode> currentLayer) {
         List<BULBNode> successors = new ArrayList<>();
+        expanded = expanded + currentLayer.size();
         for (BULBNode node : currentLayer) {
             for (Transition transition : problem.expand(node.state())) {
                 State childState = transition.state();
@@ -158,11 +171,17 @@ public class BULBSearch implements ISearchAlgorithm {
     }
 
     private List<BULBNode> layerAt(int depth) {
-        List<BULBNode> layer = new ArrayList<>();
-        for (BULBNode node : hashtable.values()) {
-            if (node.dDepth() == depth) { layer.add(node); }
+        if (depth >= sliceAtDepth.size()) {
+            return new ArrayList<>();
         }
-        return layer;
+        return sliceAtDepth.get(depth);
+    }
+
+    private void setSlice(int depth, List<BULBNode> slice) {
+        while (sliceAtDepth.size() <= depth) {
+            sliceAtDepth.add(new ArrayList<>());
+        }
+        sliceAtDepth.set(depth, slice);
     }
 
     private BULBNode bestGoal(List<BULBNode> successors) {
@@ -178,6 +197,12 @@ public class BULBSearch implements ISearchAlgorithm {
     private void removeFomTable(List<BULBNode> slice) {
         for (BULBNode node : slice) {
             hashtable.remove(node.state());
+        }
+        if (!slice.isEmpty()) {
+            int depth = slice.get(0).dDepth();
+            if (depth < sliceAtDepth.size() && sliceAtDepth.get(depth) == slice) {
+                sliceAtDepth.set(depth, new ArrayList<>());
+            }
         }
     }
 
@@ -215,5 +240,4 @@ public class BULBSearch implements ISearchAlgorithm {
         Collections.reverse(schedule);
         return schedule;
     }
-
 }

@@ -109,6 +109,14 @@ public class MachineSequences {
     }
 
     public MachineSequences applied(Move move) {
+        if (move.type() == Move.MoveType.SEGMENT_SWAP) {
+            MachineSequences result = this;
+            for (Move part : move.segment()) {
+                result = result.applied(part);
+            }
+            return result;
+        }
+
         List<Operation> source = orderPerMachine.get(move.machineId());
         if (source == null) {
             throw new IllegalArgumentException("Unknown machine in move: " + move.machineId());

@@ -7,9 +7,8 @@ import at.fhv.solver.State;
 
 import java.util.List;
 
-public class MakespanEstimateHeuristic implements IHeuristic {
-    private final JsspProblem jsspProblem;
-    private final double weight;
+// Untere Schranke für Makespan
+public class AdmissibleBoundHeuristic implements IHeuristic {
     private final int jobCount;
     private final int machineCount;
     private final int[][] operationMachine;
@@ -18,15 +17,10 @@ public class MakespanEstimateHeuristic implements IHeuristic {
     private final int[] capacity;
     private final int[] offset;
 
-    public MakespanEstimateHeuristic(JsspProblem jsspProblem) {
-        this(jsspProblem, 1.0);
-    }
-
-    public MakespanEstimateHeuristic(JsspProblem jsspProblem, double weight) {
-        this.jsspProblem = jsspProblem;
-        this.weight = weight;
+    public AdmissibleBoundHeuristic(JsspProblem jsspProblem) {
         this.jobCount = jsspProblem.getJobs().size();
         this.machineCount = jsspProblem.getMachines().size();
+
         this.operationMachine = new int[jobCount][];
         this.operationTime = new int[jobCount][];
         this.remainingTime = new int[jobCount][];
@@ -59,33 +53,22 @@ public class MakespanEstimateHeuristic implements IHeuristic {
     public double evaluate(State state) {
         int[] nextOperation = state.nextOperation();
         int[] jobAvailable = state.jobAvailableTime();
+        int[] bathAvailable = state.bathAvailableTime();
 
         int jobBound = 0;
-        double penalty = 0.0;
         int[] remainingLoad = new int[machineCount];
-
         for (int job = 0; job < jobCount; job++) {
             int nextIndex = nextOperation[job];
             jobBound = Math.max(jobBound, jobAvailable[job] + remainingTime[job][nextIndex]);
 
-            // Restlast pro Maschine aufsummieren (für den Maschinen-Bound)
             int[] machines = operationMachine[job];
             int[] times = operationTime[job];
             for (int i = nextIndex; i < machines.length; i++) {
                 remainingLoad[machines[i]] += times[i];
             }
-
-            penalty += calculateDwellPenalty(jsspProblem.getJobs().get(job).operations(), nextIndex, jobAvailable[job], state);
         }
 
-        int machineBound = calculateMachineBound(state, remainingLoad);
-        return Math.max(jobBound, machineBound) + penalty;
-    }
-
-    private int calculateMachineBound(State state, int[] remainingLoad) {
-        int[] bathAvailable = state.bathAvailableTime();
         int machineBound = 0;
-
         for (int machine = 0; machine < machineCount; machine++) {
             if (remainingLoad[machine] == 0) { continue; }
 
@@ -95,24 +78,10 @@ public class MakespanEstimateHeuristic implements IHeuristic {
                 if (free == State.BLOCKED) { free = 0; }
                 freeSum += free;
             }
-
             int estimate = (int) ((freeSum + remainingLoad[machine]) / capacity[machine]);
             machineBound = Math.max(machineBound, estimate);
         }
-        return machineBound;
-    }
 
-    private double calculateDwellPenalty(List<Operation> operations, int nextIndex, int jobAvailable, State state) {
-        if (nextIndex <= 0 || nextIndex >= operations.size()) { return 0.0; }
-        Operation predecessor = operations.get(nextIndex - 1);
-        if (!predecessor.hasDwellLimit()) { return 0.0; }
-        Operation nextOperation = operations.get(nextIndex);
-        int earliestStart = Math.max(jobAvailable, jsspProblem.earliestBathTime(state, nextOperation.machineId()));
-        int predecessorStart = jobAvailable - predecessor.processingTime();
-        int deadline = predecessorStart + predecessor.maxDwellTime();
-        int remainingDwell = deadline - earliestStart;
-        if (remainingDwell <= 0) { return weight * 10000; }
-
-        return weight * (1.0 / remainingDwell) * 1000;
+        return Math.max(jobBound, machineBound);
     }
 }

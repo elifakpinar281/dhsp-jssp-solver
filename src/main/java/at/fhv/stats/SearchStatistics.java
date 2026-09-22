@@ -25,6 +25,7 @@ public class SearchStatistics {
     private int bestMakespanSoFar = Integer.MAX_VALUE;
     private long nanosAtBest = 0;
     private long expansionsAtBest = 0;
+    private long deadline = Long.MAX_VALUE;
 
     public SearchStatistics() {
         this(1000, 0);
@@ -59,7 +60,15 @@ public class SearchStatistics {
         this.startNanos = System.nanoTime();
     }
 
-    public void reportNewBest(int makespan) {
+    public void setTimeLimitMs(long timeLimitMs) {
+        if (timeLimitMs > 0) {
+            this.deadline = System.nanoTime() + timeLimitMs * 1_000_000;
+        } else {
+            this.deadline = Long.MAX_VALUE;
+        }
+    }
+
+    public void reportNewBest(int makespan, long expansions) {
         if (makespan < bestMakespanSoFar) {
             bestMakespanSoFar = makespan;
             nanosAtBest = System.nanoTime();
@@ -104,7 +113,6 @@ public class SearchStatistics {
             }
             sampleWriter.write(sample.expansions() + "," + sample.reached() + "," + sample.frontier() + "," + sample.maxDepth());
             sampleWriter.newLine();
-            sampleWriter.flush();
         } catch (IOException exception) {
             System.err.println("Could not write sample: " + exception.getMessage());
         }
@@ -131,10 +139,11 @@ public class SearchStatistics {
     }
 
     public boolean limitReached(long expansions) {
-        if (maxExpansions <= 0) {
-            return false;
+        if (maxExpansions > 0 && expansions >= maxExpansions) {
+            stoppedByLimit = true;
+            return true;
         }
-        if (expansions >= maxExpansions) {
+        if (System.nanoTime() >= deadline) {
             stoppedByLimit = true;
             return true;
         }

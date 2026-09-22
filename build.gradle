@@ -30,3 +30,11 @@ application {
 run {
     workingDir = project.projectDir
 }
+
+tasks.register('regression', JavaExec) {
+    group = 'verification'
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'at.fhv.experiment.RegressionCheck'
+    workingDir = projectDir
+    jvmArgs '-Xmx4g'
+}

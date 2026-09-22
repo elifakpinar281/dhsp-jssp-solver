@@ -1,11 +1,15 @@
 package at.fhv.solver.impl.beamStack;
 
-public class Range {
-    public int fmin;
-    public int fmax;
+import at.fhv.solver.State;
 
-    public Range(int fmin, int fmax) {
-        this.fmin = fmin;
-        this.fmax = fmax;
+public class Range {
+    public Key min;
+    public Key max;
+
+    public Range(Key min, Key max) {
+        this.min = min;
+        this.max = max;
     }
+
+    public record Key(int f, State state) {}
 }

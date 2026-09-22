@@ -47,8 +47,7 @@ public class BeamStackSearch implements ISearchAlgorithm {
         State initialState = problem.createInitialState();
         BeamStackNode root = new BeamStackNode(initialState, null, null, lowerBound(initialState), 0);
         List<Range> items = new ArrayList<>();
-        items.add(new Range(0, INF));
-
+        items.add(new Range(lowestKey(), boundKey(INF)));
         int upperBound = INF;
         BeamStackNode bestGoal = null;
 
@@ -58,28 +57,10 @@ public class BeamStackSearch implements ISearchAlgorithm {
             if (result.goal() != null && result.makespan() < upperBound) {
                 upperBound = result.makespan();
                 bestGoal = result.goal();
-
-                while (!items.isEmpty() && items.get(items.size()-1).fmax >= upperBound) {
-                    items.remove(items.size()-1);
-                }
-
-                if (items.isEmpty()) { break; }
-                Range top = items.get(items.size()-1);
-                top.fmin = top.fmax;
-                top.fmax = upperBound;
+                searchStatistics.reportNewBest(upperBound, expanded);
+                if (!backtrack(items, upperBound)) { break; }
             } else {
-                while (!items.isEmpty() && items.get(items.size()-1).fmin <= upperBound) {
-                    items.remove(items.size()-1);
-                }
-                if (items.isEmpty()) { break; }
-                Range top = items.get(items.size()-1);
-                if (top.fmin >= top.fmax) {
-                    items.remove(items.size()-1);
-                    if (items.isEmpty()) { break; }
-                    continue;
-                }
-                top.fmin = top.fmax;
-                top.fmax = upperBound;
+                if (!backtrack(items, upperBound)) { break; }
             }
             searchStatistics.record(expanded, 0, 0, maxDepthReached);
             if (searchStatistics.limitReached(expanded)) {
@@ -91,24 +72,33 @@ public class BeamStackSearch implements ISearchAlgorithm {
         return new Schedule(buildSchedule(bestGoal));
     }
 
+    private boolean backtrack(List<Range> items, int upperBound) {
+        while (!items.isEmpty() && items.get(items.size() - 1).max.f() >= upperBound) {
+            items.remove(items.size() - 1);
+        }
+        if (items.isEmpty()) { return false; }
 
+        Range top = items.get(items.size() - 1);
+        top.min = top.max;
+        top.max = boundKey(upperBound);
+        return true;
+    }
 
     private SweepResult search(BeamStackNode root, List<Range> items, int upperBound) {
         Map<Integer, List<BeamStackNode>> open = new HashMap<>();
         open.put(0, new ArrayList<>(List.of(root)));
-        Map<State, BeamStackNode> seen = new HashMap<>();
-        seen.put(root.state(), root);
-
+        long generated = 1;
         BeamStackNode bestGoal = null;
         int bestMakespan = upperBound;
 
         int layer = 0;
         while (open.containsKey(layer) && !open.get(layer).isEmpty()) {
             if (items.size() <= layer) {
-                items.add(new Range(0, upperBound == INF ? INF : upperBound));
+                items.add(new Range(lowestKey(), boundKey(upperBound)));
             }
             Range range = items.get(layer);
             List<BeamStackNode> nextLayer = open.computeIfAbsent(layer + 1, key -> new ArrayList<>());
+            Set<State> seenNextLayer = new HashSet<>();
 
             for (BeamStackNode node : open.get(layer)) {
                 if (problem.isGoal(node.state())) {
@@ -122,11 +112,11 @@ public class BeamStackSearch implements ISearchAlgorithm {
                 expanded++;
                 for (BeamStackNode child : expand(node)) {
                     int f = child.f();
-                    if (f < range.fmin || f >= range.fmax) { continue; }
+                    Range.Key key = keyOf(child);
+                    if (compareKeys(key, range.min) < 0 || compareKeys(key, range.max) >= 0) { continue; }
                     if (f >= upperBound) {continue;}
-                    BeamStackNode previous = seen.get(child.state());
-                    if (previous != null) { continue; }
-                    seen.put(child.state(), child);
+                    if (!seenNextLayer.add(child.state())) { continue; }
+                    generated++;
                     nextLayer.add(child);
                 }
             }
@@ -135,27 +125,47 @@ public class BeamStackSearch implements ISearchAlgorithm {
             }
 
             if (layer + 1 > maxDepthReached) { maxDepthReached = layer + 1; }
-            searchStatistics.record(expanded, seen.size(), nextLayer.size(), maxDepthReached);
+            searchStatistics.record(expanded, (int) Math.min(generated, Integer.MAX_VALUE), nextLayer.size(), maxDepthReached);
             if (searchStatistics.limitReached(expanded)) {
                 searchStatistics.markStoppedByLimit();
                 break;
             }
+            open.remove(layer);
             layer++;
         }
         return new SweepResult(bestGoal, bestMakespan);
     }
 
     private void pruneLayer(List<BeamStackNode> layerNodes, Range range) {
-        layerNodes.sort(Comparator.comparingInt((BeamStackNode n) -> n.f()).thenComparing(n -> n.state(), BeamStackSearch::compareStates));
-        int smallestPruned = INF;
-        for (int i = beamWidth; i < layerNodes.size(); i++) {
-            smallestPruned = Math.min(smallestPruned, layerNodes.get(i).f());
+        layerNodes.sort((a, b) -> compareKeys(keyOf(a), keyOf(b)));
+
+        Range.Key firstPruned = keyOf(layerNodes.get(beamWidth));
+        if (compareKeys(firstPruned, range.max) < 0) {
+            range.max = firstPruned;
         }
-        range.fmax = Math.min(range.fmax, smallestPruned);
 
         while (layerNodes.size() > beamWidth) {
             layerNodes.remove(layerNodes.size() - 1);
         }
+    }
+
+    private static Range.Key keyOf(BeamStackNode node) {
+        return new Range.Key(node.f(), node.state());
+    }
+    private static Range.Key lowestKey() {
+        return new Range.Key(Integer.MIN_VALUE, null);
+    }
+    private static Range.Key boundKey(int bound) {
+        return new Range.Key(bound, null);
+    }
+
+    private static int compareKeys(Range.Key a, Range.Key b) {
+        int byF = Integer.compare(a.f(), b.f());
+        if (byF != 0) { return byF; }
+        if (a.state() == null && b.state() == null) { return 0; }
+        if (a.state() == null) { return -1; }
+        if (b.state() == null) { return 1; }
+        return compareStates(a.state(), b.state());
     }
 
     private List<BeamStackNode> expand(BeamStackNode node) {
@@ -203,5 +213,4 @@ public class BeamStackSearch implements ISearchAlgorithm {
         Collections.reverse(schedule);
         return schedule;
     }
-
 }

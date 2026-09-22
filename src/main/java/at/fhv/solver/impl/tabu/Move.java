@@ -2,20 +2,28 @@ package at.fhv.solver.impl.tabu;
 
 import at.fhv.model.jssp.Operation;
 
+import java.util.List;
+
 public record Move (
         Operation operationA,
         Operation operationB,
         int machineId,
-        MoveType type
+        MoveType type,
+        List<Move> segment
 ){
     public enum MoveType{
         SWAP,
         MOVE_AFTER,
-        MOVE_BEFORE
+        MOVE_BEFORE,
+        SEGMENT_SWAP
     }
 
     public Move(Operation operationA, Operation operationB, int machineId) {
-        this(operationA, operationB, machineId, MoveType.SWAP);
+        this(operationA, operationB, machineId, MoveType.SWAP, null);
+    }
+
+    public Move(Operation operationA, Operation operationB, int machineId, MoveType type) {
+        this(operationA, operationB, machineId, type, null);
     }
 
     public record MoveAttribute(
@@ -31,7 +39,8 @@ public record Move (
         Operation first = operationA;
         Operation second = operationB;
 
-        if (type == MoveType.SWAP && isAfter(operationA, operationB)) {
+        boolean isSwap = type == MoveType.SWAP || type == MoveType.SEGMENT_SWAP;
+        if (isSwap && isAfter(operationA, operationB)) {
             first = operationB;
             second = operationA;
         }

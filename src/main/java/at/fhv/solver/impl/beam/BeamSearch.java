@@ -29,9 +29,8 @@ public class BeamSearch implements ISearchAlgorithm {
 
         TreeMap<Integer, List<Node>> levels = new TreeMap<>();
         levels.computeIfAbsent(scheduledCount(initialState), key -> new ArrayList<>()).add(initialNode);
-
-        Set<State> visited = new HashSet<>();
-        visited.add(initialState);
+        Map<Integer, Set<State>> visitedPerLevel = new HashMap<>();
+        long generated = 1;
 
         statistics.setTotalOperations(problem.totalOperations());
         long expanded = 0;
@@ -43,6 +42,7 @@ public class BeamSearch implements ISearchAlgorithm {
             Map.Entry<Integer, List<Node>> entry = levels.pollFirstEntry();
             int depth = entry.getKey();
             List<Node> level = entry.getValue();
+            visitedPerLevel.remove(depth);
 
             if (depth > maxDepth) { maxDepth = depth; }
 
@@ -53,6 +53,7 @@ public class BeamSearch implements ISearchAlgorithm {
                 if (problem.isGoal(node.state())) {
                     if (bestGoal == null || makespanOf(node) < makespanOf(bestGoal)) {
                         bestGoal = node;
+                        statistics.reportNewBest(makespanOf(node), expanded);
                     }
                     continue;
                 }
@@ -60,13 +61,21 @@ public class BeamSearch implements ISearchAlgorithm {
 
                 for (Node child : expand(node, problem)) {
                     State childState = child.state();
-                    if (visited.contains(childState)) { continue; }
-                    visited.add(childState);
-                    levels.computeIfAbsent(scheduledCount(childState), key -> new ArrayList<>()).add(child);
+                    int childDepth = scheduledCount(childState);
+
+                    Set<State> levelSet = visitedPerLevel.get(childDepth);
+                    if (levelSet == null) {
+                        levelSet = new HashSet<>();
+                        visitedPerLevel.put(childDepth, levelSet);
+                    }
+                    if (!levelSet.add(childState)) { continue; }
+
+                    generated++;
+                    levels.computeIfAbsent(childDepth, key -> new ArrayList<>()).add(child);
                 }
             }
 
-            statistics.record(expanded, visited.size(), beam.size(), maxDepth);
+            statistics.record(expanded, (int) Math.min(generated, Integer.MAX_VALUE), beam.size(), maxDepth);
             if (statistics.limitReached(expanded)) {
                 statistics.markStoppedByLimit();
                 return bestGoal == null ? null : new Schedule(buildSchedule(bestGoal));

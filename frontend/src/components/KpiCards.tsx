@@ -17,9 +17,21 @@ export default function KpiCards({ run }: { run: RunLog }) {
     ];
 
     const aside: Kpi[] = [
-        { label: "CPU time", value: formatRuntime(run.cpuMs) },
-        { label: "Budget", value: run.stoppedByLimit ? "limit reached" : "OK" },
+        { label: "CPU time (thread)", value: formatRuntime(run.cpuMs) },
     ];
+    if (run.processCpuMs !== undefined) {
+        aside.push({ label: "CPU time (process)", value: formatRuntime(run.processCpuMs) });
+    }
+    if (run.gcMs !== undefined) {
+        aside.push({ label: "GC time", value: formatRuntime(run.gcMs) });
+    }
+    if (run.timeToBestMs !== undefined && run.timeToBestMs !== null) {
+        aside.push({ label: "Time to best", value: formatRuntime(run.timeToBestMs) });
+    }
+    if (run.peakHeapAfterGc !== undefined) {
+        aside.push({ label: "Memory measured", value: run.peakHeapAfterGc ? "live after GC" : "used heap (no GC)" });
+    }
+    aside.push({ label: "Budget", value: run.stoppedByLimit ? "limit reached" : "OK" });
 
     return (
         <div className="kpi-block">

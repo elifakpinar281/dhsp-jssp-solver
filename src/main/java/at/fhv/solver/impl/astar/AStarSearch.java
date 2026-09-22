@@ -19,6 +19,9 @@ public class AStarSearch implements ISearchAlgorithm {
     private final SearchStatistics statistics;
     private final int maxNodes;
     private final double weight;
+    private final boolean completeOnLimit;
+
+    private record QueueEntry(Node node, double f, int depth) {}
 
     public AStarSearch(IHeuristic heuristic) {
         this(heuristic, new SearchStatistics(), DEFAULT_MAX_NODES, DEFAULT_WEIGHT);
@@ -29,10 +32,15 @@ public class AStarSearch implements ISearchAlgorithm {
     }
 
     public AStarSearch(IHeuristic heuristic, SearchStatistics statistics, int maxNodes, double weight) {
+        this(heuristic, statistics, maxNodes, weight, true);
+    }
+
+    public AStarSearch(IHeuristic heuristic, SearchStatistics statistics, int maxNodes, double weight, boolean completeOnLimit) {
         this.heuristic = heuristic;
         this.statistics = statistics;
         this.maxNodes = maxNodes;
         this.weight = weight;
+        this.completeOnLimit = completeOnLimit;
     }
 
     @Override
@@ -41,51 +49,51 @@ public class AStarSearch implements ISearchAlgorithm {
         double heuristicValue = heuristic.evaluate(initialState);
         Node initialNode = new Node(initialState, null, heuristicValue, null);
 
-        PriorityQueue<Node> frontier = new PriorityQueue<>((n1, n2) -> {
-            int byF = Double.compare(f(n1), f(n2));
+        PriorityQueue<QueueEntry> frontier = new PriorityQueue<>((e1, e2) -> {
+            int byF = Double.compare(e1.f(), e2.f());
             if (byF != 0) { return byF; }
-
-            return Integer.compare(scheduledCount(n2.state()), scheduledCount(n1.state()));
+            return Integer.compare(e2.depth(), e1.depth());
         });
 
         Set<State> reached = new HashSet<>();
         reached.add(initialState);
-        frontier.add(initialNode);
+        frontier.add(new QueueEntry(initialNode, f(initialNode), scheduledCount(initialState)));
 
         statistics.setTotalOperations(problem.totalOperations());
         long expanded = 0;
         int maxDepth = 0;
         Node deepestNode = initialNode;
+        int deepestDepth = 0;
 
         while (!frontier.isEmpty()) {
-            Node current = frontier.poll();
+            QueueEntry entry = frontier.poll();
+            Node current = entry.node();
 
             if (problem.isGoal(current.state())) {
                 statistics.record(expanded, reached.size(), frontier.size(), maxDepth);
+                statistics.reportNewBest(pastMakespan(current.state()), expanded);
                 return new Schedule(buildSchedule(current));
             }
             expanded++;
 
-            int depth = scheduledCount(current.state());
-            if (depth > maxDepth) {
-                maxDepth = depth;
-            }
-            if (depth > scheduledCount(deepestNode.state())) {
+            int depth = entry.depth();
+            if (depth > maxDepth) { maxDepth = depth; }
+            if (depth > deepestDepth) {
                 deepestNode = current;
+                deepestDepth = depth;
             }
 
             for (Node child : expand(current, problem)) {
-                State childState = child.state();
-                if (!reached.contains(childState)) {
-                    reached.add(childState);
-                    frontier.add(child);
-                }
+                if (reached.add(child.state())) { frontier.add(new QueueEntry(child, f(child), scheduledCount(child.state()))); }
             }
             statistics.record(expanded, reached.size(), frontier.size(), maxDepth);
 
             if (statistics.limitReached(expanded) || reached.size() >= maxNodes) {
                 statistics.markStoppedByLimit();
-                return completeByF(deepestNode, problem);
+                if (!completeOnLimit) { return null; }
+                Schedule completed = completeByF(deepestNode, problem);
+                if (completed != null) { statistics.reportNewBest(makespanOf(completed), expanded); }
+                return completed;
             }
         }
         return null;
@@ -106,6 +114,14 @@ public class AStarSearch implements ISearchAlgorithm {
         return makespan;
     }
 
+    private int makespanOf(Schedule schedule) {
+        int makespan = 0;
+        for (ScheduledOperation operation : schedule.operations()) {
+            makespan = Math.max(makespan, operation.endTime());
+        }
+        return makespan;
+    }
+
     private Schedule completeByF(Node startNode, SchedulingProblem problem) {
         Node current = startNode;
 
@@ -115,9 +131,7 @@ public class AStarSearch implements ISearchAlgorithm {
 
             Node best = children.get(0);
             for (Node child : children) {
-                if (f(child) < f(best)) {
-                    best = child;
-                }
+                if (f(child) < f(best)) { best = child; }
             }
             current = best;
         }
