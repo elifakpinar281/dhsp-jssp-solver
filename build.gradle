@@ -14,6 +14,7 @@ dependencies {
     testImplementation platform('org.junit:junit-bom:5.10.0')
     testImplementation 'org.junit.jupiter:junit-jupiter'
     implementation 'org.jfree:jfreechart:1.5.4'
+    implementation 'tools.profiler:jfr-converter:4.5'
     implementation 'com.google.code.gson:gson:2.11.0'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
@@ -37,4 +38,29 @@ tasks.register('regression', JavaExec) {
     mainClass = 'at.fhv.experiment.RegressionCheck'
     workingDir = projectDir
     jvmArgs '-Xmx4g'
+}
+
+def profiler = System.getProperty('user.home') + '/tools/async-profiler/lib/libasyncProfiler.so'
+file('profiles').mkdirs()
+
+tasks.register('profileCpu', JavaExec) {
+    group = 'profiling'
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'at.fhv.Main'
+    workingDir = projectDir
+    jvmArgs '-Xmx4g',
+            '-XX:+UnlockDiagnosticVMOptions',
+            '-XX:+DebugNonSafepoints',
+            '-agentpath:' + profiler + '=start,event=cpu,file=profiles/cpu-%t.html'
+}
+
+tasks.register('profileAllocation', JavaExec) {
+    group = 'profiling'
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'at.fhv.Main'
+    workingDir = projectDir
+    jvmArgs '-Xmx4g',
+            '-XX:+UnlockDiagnosticVMOptions',
+            '-XX:+DebugNonSafepoints',
+            '-agentpath:' + profiler + '=start,event=alloc,file=profiles/alloc-%t.html'
 }
