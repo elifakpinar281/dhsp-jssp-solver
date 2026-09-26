@@ -14,6 +14,7 @@ public class SearchStatistics {
     private int lastReached = 0;
     private int lastFrontier = 0;
     private int lastMaxDepth = 0;
+    private int peakFrontier = 0;
 
     private long lastSampledExpansions = -1;
 
@@ -45,6 +46,9 @@ public class SearchStatistics {
         this.lastReached = reached;
         this.lastFrontier = frontier;
         this.lastMaxDepth = maxDepth;
+        if (frontier > peakFrontier) {
+            peakFrontier = frontier;
+        }
 
         boolean firstSample = (lastSampledExpansions < 0);
         boolean intervalReached = (expansions - lastSampledExpansions >= sampleInterval);
@@ -160,5 +164,9 @@ public class SearchStatistics {
 
     public int getLastMaxDepth() {
         return lastMaxDepth;
+    }
+
+    public int getPeakFrontier() {
+        return peakFrontier;
     }
 }

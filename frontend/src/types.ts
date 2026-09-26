@@ -26,6 +26,8 @@ export interface RunLog {
     peakHeap: number;
     peakHeapKb?: number;
     peakHeapAfterGc?: boolean;
+    allocatedBytes?: number;
+    peakFrontier?: number;
     timeToBestMs?: number | null;
     expanded: number;
     reached: number;

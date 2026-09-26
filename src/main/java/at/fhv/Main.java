@@ -381,6 +381,8 @@ public class Main {
         MemorySampler memorySampler = new MemorySampler();
         memorySampler.start();
 
+        com.sun.management.ThreadMXBean allocationBean = (com.sun.management.ThreadMXBean) threadBean;
+        long allocatedStart = allocationBean.getCurrentThreadAllocatedBytes();
         long cpuStart = threadBean.getCurrentThreadCpuTime();
         long processCpuStart = osBean.getProcessCpuTime();
         long gcStart = totalGcMillis();
@@ -392,6 +394,8 @@ public class Main {
 
         long elapsed = (System.nanoTime() - start) / 1_000_000;
         long cpuMs = (threadBean.getCurrentThreadCpuTime() - cpuStart) / 1_000_000;
+        long allocatedEnd = allocationBean.getCurrentThreadAllocatedBytes();
+        long allocatedBytes = (allocatedStart < 0 || allocatedEnd < 0) ? -1 : allocatedEnd - allocatedStart;
         long processCpuMs = (osBean.getProcessCpuTime() - processCpuStart) / 1_000_000;
         long gcMs = totalGcMillis() - gcStart;
         memorySampler.shutdown();
@@ -427,7 +431,8 @@ public class Main {
                 valid, elapsed, cpuMs, processCpuMs, gcMs, memorySampler.getPeak(), memorySampler.getPeakKb(), memorySampler.isAfterGc(),
                 statistics.getLastExpansions(), statistics.getLastReached(), statistics.getLastMaxDepth(), statistics.isStoppedByLimit(), history,
                 schedule == null ? null : schedule.operations(), violations,
-                seed, cores, lowerBound, gapPercent, evaluations, timeToBestMs, expansionsToBest, config.timeMs()
+                seed, cores, lowerBound, gapPercent, evaluations, timeToBestMs, expansionsToBest, config.timeMs(),
+                allocatedBytes, statistics.getPeakFrontier()
         );
     }
 

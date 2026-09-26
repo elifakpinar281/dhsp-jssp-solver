@@ -39,5 +39,7 @@ public record RunLog(
         long evaluations,
         Long timeToBestMs,
         long expansionsToBest,
-        long timeLimitMs
+        long timeLimitMs,
+        long allocatedBytes,
+        int peakFrontier
 ) {}

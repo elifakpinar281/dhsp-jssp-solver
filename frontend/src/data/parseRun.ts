@@ -1,4 +1,4 @@
-import type { RunLog, ScheduledOp } from "../types";
+import type { IterationTriple, RunLog, ScheduledOp } from "../types";
 
 function toScheduledOp(raw: unknown): ScheduledOp | null {
     if (raw === null || typeof raw !== "object") { return null; }
@@ -21,12 +21,44 @@ function toSchedule(raw: unknown): ScheduledOp[] | null {
     return ops;
 }
 
+function toIterationTriple(raw: unknown): IterationTriple | null {
+    if (Array.isArray(raw)) {
+        const iteration = raw[0];
+        const current = raw[1];
+        const best = raw[2];
+        if (typeof iteration !== "number" || typeof current !== "number" || typeof best !== "number") { return null; }
+        return [iteration, current, best];
+    }
+    if (raw === null || typeof raw !== "object") { return null; }
+    const value = raw as Record<string, unknown>;
+    const iteration = value.iteration;
+    const current = value.makespan;
+    const best = value.bestMakespan;
+    if (typeof iteration !== "number" || typeof current !== "number" || typeof best !== "number") { return null; }
+    return [iteration, current, best];
+}
+
+function toIterations(raw: unknown): IterationTriple[] | null {
+    if (!Array.isArray(raw)) { return null; }
+    const triples: IterationTriple[] = [];
+    for (const item of raw) {
+        const triple = toIterationTriple(item);
+        if (triple !== null) { triples.push(triple); }
+    }
+    return triples;
+}
+
 function toProblemMode(value: Record<string, unknown>, fallbackId: string): string | undefined {
     const raw = value.mode ?? value.problem;
     if (typeof raw === "string" && raw.length > 0) { return raw.toUpperCase(); }
     if (fallbackId.includes("_FJSSP_") || fallbackId.endsWith("_FJSSP")) { return "FJSSP"; }
     if (fallbackId.includes("_JSSP_") || fallbackId.endsWith("_JSSP")) { return "JSSP"; }
     return undefined;
+}
+
+function toAllocatedBytes(raw: unknown): number | undefined {
+    if (typeof raw !== "number" || raw < 0) { return undefined; }
+    return raw;
 }
 
 export function toRunLog(raw: unknown, fallbackId: string): RunLog | null {
@@ -52,13 +84,15 @@ export function toRunLog(raw: unknown, fallbackId: string): RunLog | null {
         peakHeap: typeof value.peakHeap === "number" ? value.peakHeap : 0,
         peakHeapKb: typeof value.peakHeapKb === "number" ? value.peakHeapKb : undefined,
         peakHeapAfterGc: typeof value.peakHeapAfterGc === "boolean" ? value.peakHeapAfterGc : undefined,
+        allocatedBytes: toAllocatedBytes(value.allocatedBytes),
+        peakFrontier: typeof value.peakFrontier === "number" ? value.peakFrontier : undefined,
         timeToBestMs: typeof value.timeToBestMs === "number" ? value.timeToBestMs : null,
         expanded: typeof value.expanded === "number" ? value.expanded : 0,
         reached: typeof value.reached === "number" ? value.reached : 0,
         maxDepth: typeof value.maxDepth === "number" ? value.maxDepth : 0,
         stoppedByLimit: value.stoppedByLimit === true,
         violations: Array.isArray(value.violations) ? (value.violations as string[]) : [],
-        iterations: Array.isArray(value.iterations) ? (value.iterations as RunLog["iterations"]) : null,
+        iterations: toIterations(value.iterations),
         schedule: toSchedule(value.schedule),
     };
 }
